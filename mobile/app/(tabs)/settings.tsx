@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  Alert, Modal, Pressable, Switch, Platform,
+  Alert, Modal, Pressable, Switch, Platform, TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -16,6 +16,23 @@ const Icon = {
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M20 21a8 8 0 00-16 0" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       <Circle cx="12" cy="7" r="4" stroke={color} strokeWidth="1.8" />
+    </Svg>
+  ),
+  Users: ({ color = '#06b6d4', size = 20 }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx="9" cy="7" r="4" stroke={color} strokeWidth="1.8" />
+      <Path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  ),
+  Plus: ({ color = '#fff', size = 20 }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M12 5v14M5 12h14" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  ),
+  X: ({ color = '#94a3b8', size = 20 }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M18 6L6 18M6 6l12 12" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   ),
   ChevronRight: ({ color = '#94a3b8', size = 16 }) => (
@@ -80,6 +97,8 @@ const Icon = {
 // ─── Avatar Picker Modal ──────────────────────────────────────────────────────
 
 const AVATARS = ['🐼', '🦊', '🐬', '🦁', '🐸', '🦄', '🐙', '🦋', '🐺', '🦅', '🐲', '🌙'];
+
+// ─── Avatar Picker Modal ──────────────────────────────────────────────────────
 
 interface AvatarModalProps {
   visible: boolean;
@@ -275,7 +294,7 @@ export default function ProfileScreen() {
         onSelectEmoji={setAvatarEmoji}
         onSelectPhoto={handleSelectPhoto}
       />
-
+      
       <ScrollView showsVerticalScrollIndicator={false} bounces={false} contentContainerStyle={{ paddingBottom: 40 }}>
 
         {/* ── Header ── */}

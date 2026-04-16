@@ -74,6 +74,8 @@ model User {
   reminders        Reminder[]
   notes            Note[]
   contacts         Contact[]
+  groups           Group[]
+  groupMembers     GroupMember[]
   emailDrafts      EmailDraft[]
   emailTemplates   EmailTemplate[]
 
@@ -116,8 +118,11 @@ model Event {
   id            String        @id @default(uuid()) @db.Uuid
   userId        String        @db.Uuid @map("user_id")
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId       String?       @db.Uuid @map("group_id")
+  group         Group?        @relation(fields: [groupId], references: [id], onDelete: Cascade)
   title         String
   description   String?
+  eventType     String        @default("event") @map("event_type")
   startAt       DateTime      @db.Timestamptz @map("start_at")
   endAt         DateTime      @db.Timestamptz @map("end_at")
   isAllDay      Boolean       @default(false) @map("is_all_day")
@@ -133,6 +138,33 @@ model Event {
   updatedAt     DateTime      @updatedAt @db.Timestamptz @map("updated_at")
 
   @@map("events")
+}
+
+model Group {
+  id          String        @id @default(uuid()) @db.Uuid
+  userId      String        @db.Uuid @map("user_id")
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?       @map("description")
+  events      Event[]
+  members     GroupMember[]
+  createdAt   DateTime      @default(now()) @db.Timestamptz @map("created_at")
+  updatedAt   DateTime      @updatedAt @db.Timestamptz @map("updated_at")
+
+  @@map("groups")
+}
+
+model GroupMember {
+  id        String   @id @default(uuid()) @db.Uuid
+  groupId   String   @db.Uuid @map("group_id")
+  email     String   @db.Text
+  userId    String?  @db.Uuid @map("user_id")
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @db.Timestamptz @map("created_at")
+
+  @@unique([groupId, email])
+  @@map("group_members")
 }
 
 model Contact {

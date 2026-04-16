@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar,
+  Modal, Pressable, TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Svg, { Path, Rect, Line, Circle, Polyline, Polygon } from 'react-native-svg';
@@ -54,7 +55,66 @@ const LOG_ITEMS = [
 
 const THEME_BLUE = '#111827'; 
 
-// ── Screen ────────────────────────────────────────────────────────────────────
+const CreateGroupModal = ({
+  visible,
+  onClose,
+  groupName,
+  setGroupName,
+  groupDesc,
+  setGroupDesc,
+  onCreate,
+  loading,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  groupName: string;
+  setGroupName: (value: string) => void;
+  groupDesc: string;
+  setGroupDesc: (value: string) => void;
+  onCreate: () => void;
+  loading: boolean;
+}) => (
+  <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }} onPress={onClose}>
+      <Pressable style={{ backgroundColor: '#16161f', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40 }}>
+        <View style={{ width: 40, height: 4, backgroundColor: '#ffffff20', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
+        <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 6 }}>Create Department</Text>
+        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 24 }}>Add a new group and invite members by email.</Text>
+
+        <Text style={{ color: '#94a3b8', fontSize: 12, fontWeight: '700', marginBottom: 8 }}>Department name</Text>
+        <View style={{ marginBottom: 16, borderRadius: 14, backgroundColor: '#0d1117', borderWidth: 1, borderColor: '#2b2f3a', paddingHorizontal: 14 }}>
+          <TextInput
+            value={groupName}
+            onChangeText={setGroupName}
+            placeholder="Engineering, Sales, HR"
+            placeholderTextColor="rgba(255,255,255,0.3)"
+            style={{ color: '#fff', minHeight: 44 }}
+          />
+        </View>
+
+        <Text style={{ color: '#94a3b8', fontSize: 12, fontWeight: '700', marginBottom: 8 }}>Description</Text>
+        <View style={{ marginBottom: 24, borderRadius: 14, backgroundColor: '#0d1117', borderWidth: 1, borderColor: '#2b2f3a', paddingHorizontal: 14, paddingVertical: 12 }}>
+          <TextInput
+            value={groupDesc}
+            onChangeText={setGroupDesc}
+            placeholder="Optional department purpose"
+            placeholderTextColor="rgba(255,255,255,0.3)"
+            multiline
+            style={{ color: '#fff', minHeight: 70 }}
+          />
+        </View>
+
+        <TouchableOpacity
+          onPress={onCreate}
+          disabled={loading}
+          style={{ backgroundColor: '#06b6d4', borderRadius: 16, paddingVertical: 14, alignItems: 'center', opacity: loading ? 0.7 : 1 }}
+        >
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Create Department</Text>}
+        </TouchableOpacity>
+      </Pressable>
+    </Pressable>
+  </Modal>
+);
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -64,8 +124,29 @@ export default function DashboardScreen() {
   });
 
   const { data: tasks, isLoading: isTasksLoading } = trpc.task.getTasks.useQuery();
+  const { data: groups = [], refetch: refetchGroups } = trpc.group.getGroups.useQuery();
+  const createGroupMutation = trpc.group.createGroup.useMutation({
+    onSuccess: () => {
+      setShowCreateGroupModal(false);
+      setGroupName('');
+      setGroupDesc('');
+      refetchGroups();
+    },
+  });
+
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [groupDesc, setGroupDesc] = useState('');
 
   const isLoading = isUserLoading || isTasksLoading;
+
+  const handleCreateGroup = () => {
+    if (!groupName.trim()) return;
+    createGroupMutation.mutate({
+      name: groupName.trim(),
+      description: groupDesc.trim() || undefined,
+    });
+  };
 
   if (isLoading && !user) {
     return (
@@ -84,6 +165,16 @@ export default function DashboardScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#f6f5f3' }}>
       <StatusBar barStyle="light-content" backgroundColor={THEME_BLUE} />
+      <CreateGroupModal
+        visible={showCreateGroupModal}
+        onClose={() => setShowCreateGroupModal(false)}
+        groupName={groupName}
+        setGroupName={setGroupName}
+        groupDesc={groupDesc}
+        setGroupDesc={setGroupDesc}
+        onCreate={handleCreateGroup}
+        loading={createGroupMutation.isPending}
+      />
       <ScrollView 
         showsVerticalScrollIndicator={false} 
         bounces={false}
@@ -98,7 +189,7 @@ export default function DashboardScreen() {
               <View>
                 <Text className="text-white/40 text-[13px] font-semibold mb-1">Good morning</Text>
                 <Text className="text-white text-[28px] font-black tracking-tighter" style={{ letterSpacing: -0.6 }}>
-                  {user?.name || 'Sarah Johnson'}
+                  {user?.name || 'xyz'}
                 </Text>
               </View>
               <View style={{ position: 'relative' }}>
@@ -177,6 +268,44 @@ export default function DashboardScreen() {
               ))}
             </View>
 
+            <View style={{ marginBottom: 20 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <Text className="text-[13px] font-extrabold text-[#0f172a]">Departments</Text>
+                <TouchableOpacity onPress={() => setShowCreateGroupModal(true)} style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, backgroundColor: '#e0f2fe' }}>
+                  <Text style={{ color: '#0c4a6e', fontSize: 12, fontWeight: '700' }}>New</Text>
+                </TouchableOpacity>
+              </View>
+
+              {groups.length ? (
+                <View style={{ gap: 12 }}>
+                  {groups.map((group: any) => (
+                    <TouchableOpacity
+                      key={group.id}
+                      activeOpacity={0.85}
+                      onPress={() => router.push({ pathname: '/group/[groupId]', params: { groupId: group.id } })}
+                      style={{ backgroundColor: '#fff', borderRadius: 22, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <View style={{ flex: 1, paddingRight: 10 }}>
+                          <Text style={{ color: '#0f172a', fontSize: 15, fontWeight: '800', marginBottom: 4 }}>{group.name}</Text>
+                          {group.description ? <Text style={{ color: '#6b7280', fontSize: 12 }}>{group.description}</Text> : <Text style={{ color: '#9ca3af', fontSize: 12 }}>No description added</Text>}
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ color: '#06b6d4', fontSize: 12, fontWeight: '700' }}>{group.members?.length ?? 0} members</Text>
+                          <Text style={{ color: '#94a3b8', fontSize: 10, marginTop: 6 }}>Tap to manage</Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                <View style={{ backgroundColor: '#fff', borderRadius: 22, padding: 18, alignItems: 'center' }}>
+                  <Text style={{ color: '#0f172a', fontSize: 14, fontWeight: '700', marginBottom: 6 }}>No departments yet</Text>
+                  <Text style={{ color: '#6b7280', fontSize: 12, textAlign: 'center' }}>Create a department to group events and invite members by email.</Text>
+                </View>
+              )}
+            </View>
+
             {/* Meeting card */}
             <TouchableOpacity
               activeOpacity={0.9}
@@ -202,29 +331,6 @@ export default function DashboardScreen() {
                 <IconUsers color="white" size={22} />
               </View>
             </TouchableOpacity>
-
-            {/* Mini cards row - Optimization for Mobile Balance */}
-            <View style={{ flexDirection: 'row', marginBottom: 20 }}>
-              {[
-                { title: 'Notes', sub: 'This week', num: '12', tagLabel: '3 unread', tagBg: '#fffbeb', tagColor: '#92400e', numColor: '#0f172a' },
-                { title: 'Focus time', sub: 'Today', num: '2h', tagLabel: 'Blocked', tagBg: '#fff0ee', tagColor: '#9a3412', numColor: '#e87a6e' },
-              ].map((c, i) => (
-                <View key={c.title} className="bg-white rounded-[22px]" style={{
-                  flex: 1, 
-                  padding: 14, // Reduced from 18
-                  marginRight: i === 0 ? 10 : 0, // Reduced from 12
-                  shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
-                }}>
-                  <Text className="text-[13px] font-extrabold text-[#0f172a]">{c.title}</Text>
-                  <Text className="text-[11px] text-[#9ca3af] font-bold mt-0.5 mb-2">{c.sub}</Text>
-                  <Text className="text-[26px] font-black tracking-tighter" style={{ color: c.numColor }}>{c.num}</Text>
-                  <View style={{ alignSelf: 'flex-start', backgroundColor: c.tagBg }} className="rounded-[8px] px-[8px] py-[3.5px] mt-2">
-                    <Text style={{ color: c.tagColor }} className="text-[10px] font-extrabold">{c.tagLabel}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-
             {/* AI banner */}
             <TouchableOpacity
               activeOpacity={0.85}

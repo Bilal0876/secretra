@@ -9,6 +9,8 @@ const eventInputSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   location: z.string().optional(),
+  groupId: z.string().uuid().optional(),
+  eventType: z.string().default('event'),
   startAt: z.string().datetime(),
   endAt: z.string().datetime(),
   isAllDay: z.boolean().default(false),
@@ -19,6 +21,8 @@ const eventInputSchema = z.object({
 
 const eventUpdateSchema = z.object({
   id: z.string().uuid(),
+  groupId: z.string().uuid().optional(),
+  eventType: z.string().default('event'), // 'meeting' | 'event' | 'reminder' | 'task' | 'call' | 'lunch' | 'travel' | string
   title: z.string().optional(),
   description: z.string().optional(),
   location: z.string().optional(),
@@ -36,11 +40,13 @@ export const calendarRouter = router({
     .input(z.object({
       startDate: z.string().datetime().optional(),
       endDate: z.string().datetime().optional(),
+      groupId: z.string().uuid().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       return prisma.event.findMany({
         where: {
           userId: ctx.user.id,
+          ...(input?.groupId ? { groupId: input.groupId } : {}),
           ...(input?.startDate || input?.endDate ? {
             startAt: {
               ...(input.startDate ? { gte: new Date(input.startDate) } : {}),
@@ -49,6 +55,9 @@ export const calendarRouter = router({
           } : {}),
         },
         orderBy: { startAt: 'asc' },
+        include: {
+          group: true,
+        },
       });
     }),
 
@@ -56,13 +65,34 @@ export const calendarRouter = router({
   createEvent: protectedProcedure
     .input(eventInputSchema)
     .mutation(async ({ ctx, input }) => {
-      const { startAt, endAt, ...rest } = input;
+      const { startAt, endAt, groupId, ...rest } = input;
+      const start = new Date(startAt);
+      const end = new Date(endAt);
+
+      const conflictWhere = {
+        userId: ctx.user.id,
+        ...(groupId ? { groupId } : {}),
+        AND: [
+          { startAt: { lt: end } },
+          { endAt: { gt: start } },
+        ],
+      };
+
+      const conflictingEvent = await prisma.event.findFirst({
+        where: conflictWhere,
+      });
+
+      if (conflictingEvent) {
+        throw new Error('Event time conflicts with an existing booking. Please choose a different time.');
+      }
+
       return prisma.event.create({
         data: {
           ...rest,
           userId: ctx.user.id,
-          startAt: new Date(startAt),
-          endAt: new Date(endAt),
+          groupId,
+          startAt: start,
+          endAt: end,
         },
       });
     }),
@@ -71,8 +101,8 @@ export const calendarRouter = router({
   updateEvent: protectedProcedure
     .input(eventUpdateSchema)
     .mutation(async ({ ctx, input }) => {
-      const { id, startAt, endAt, ...data } = input;
-      
+      const { id, startAt, endAt, groupId, ...data } = input;
+
       // Ensure the event belongs to the user
       const existing = await prisma.event.findFirst({
         where: { id, userId: ctx.user.id }
@@ -82,12 +112,35 @@ export const calendarRouter = router({
         throw new Error('Event not found or unauthorized');
       }
 
+      const start = startAt ? new Date(startAt) : existing.startAt;
+      const end = endAt ? new Date(endAt) : existing.endAt;
+      const targetGroupId = groupId ?? existing.groupId;
+
+      const conflictWhere = {
+        userId: ctx.user.id,
+        ...(targetGroupId ? { groupId: targetGroupId } : {}),
+        AND: [
+          { startAt: { lt: end } },
+          { endAt: { gt: start } },
+          { NOT: { id } },
+        ],
+      };
+
+      const conflictingEvent = await prisma.event.findFirst({
+        where: conflictWhere,
+      });
+
+      if (conflictingEvent) {
+        throw new Error('Updated event time conflicts with an existing booking. Please choose a different time.');
+      }
+
       return prisma.event.update({
         where: { id },
         data: {
           ...data,
-          ...(startAt ? { startAt: new Date(startAt) } : {}),
-          ...(endAt ? { endAt: new Date(endAt) } : {}),
+          groupId,
+          ...(startAt ? { startAt: start } : {}),
+          ...(endAt ? { endAt: end } : {}),
         },
       });
     }),

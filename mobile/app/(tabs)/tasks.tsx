@@ -264,7 +264,7 @@ export default function TasksScreen() {
           </View>
           <TouchableOpacity 
             onPress={() => setAddModalVisible(true)}
-            className="w-12 h-12 rounded-full items-center justify-center bg-[#111827]"
+            className="w-10 h-10 rounded-full items-center justify-center bg-[#111827]"
             activeOpacity={0.8}
             style={{
               shadowColor: NAVY,
