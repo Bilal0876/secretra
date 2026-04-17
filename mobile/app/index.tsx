@@ -49,7 +49,9 @@ export default function LoginScreen() {
     iosClientId: googleClientId,
     webClientId: googleClientId,
     redirectUri,
+    responseType: 'id_token',
     scopes: ['openid', 'profile', 'email'],
+    prompt: AuthSession.Prompt.SelectAccount,
   });
 
   const googleLoginMutation = trpc.profile.googleLogin.useMutation({

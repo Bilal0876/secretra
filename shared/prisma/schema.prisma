@@ -55,6 +55,11 @@ enum PlatformType {
   android
 }
 
+enum GroupMemberStatus {
+  pending
+  accepted
+}
+
 model User {
   id               String              @id @default(uuid()) @db.Uuid
   email            String              @unique
@@ -146,6 +151,7 @@ model Group {
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   description String?       @map("description")
+  imageUrl    String?       @map("image_url")
   events      Event[]
   members     GroupMember[]
   createdAt   DateTime      @default(now()) @db.Timestamptz @map("created_at")
@@ -155,13 +161,14 @@ model Group {
 }
 
 model GroupMember {
-  id        String   @id @default(uuid()) @db.Uuid
-  groupId   String   @db.Uuid @map("group_id")
-  email     String   @db.Text
-  userId    String?  @db.Uuid @map("user_id")
-  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now()) @db.Timestamptz @map("created_at")
+  id        String              @id @default(uuid()) @db.Uuid
+  groupId   String              @db.Uuid @map("group_id")
+  email     String              @db.Text
+  userId    String?             @db.Uuid @map("user_id")
+  status    GroupMemberStatus   @default(accepted) @map("status")
+  group     Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime            @default(now()) @db.Timestamptz @map("created_at")
 
   @@unique([groupId, email])
   @@map("group_members")

@@ -26,6 +26,7 @@ import {
   AlertCircle,
   Pin,
   Archive,
+  ArchiveRestore,
   Edit3,
   Clock
 } from 'lucide-react-native';
@@ -49,6 +50,7 @@ export default function NotesScreen() {
   const [sortOrder, setSortOrder] = useState('Newest');
   const [isSortModalVisible, setSortModalVisible] = useState(false);
   const [isEditingMode, setIsEditingMode] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   // Form State
   const [newTitle, setNewTitle] = useState('');
@@ -71,8 +73,8 @@ export default function NotesScreen() {
        );
     }
 
-    // Default exclude archived from main view unless specifically searching for it
-    if (!search.trim()) {
+    // Default exclude archived from main view unless specifically searching for it or showArchived is true
+    if (!search.trim() && !showArchived) {
       result = result.filter(n => !n.isArchived);
     }
     
@@ -94,7 +96,7 @@ export default function NotesScreen() {
       return 0;
     });
     return result;
-  }, [notes, search, sortOrder]);
+  }, [notes, search, sortOrder, showArchived]);
 
   // @ts-ignore - Failsafe to bypass TS inference depth limit with Prisma
   const createNoteMutation = trpc.note.createNote.useMutation({
@@ -245,6 +247,9 @@ export default function NotesScreen() {
           )}
           <TouchableOpacity onPress={() => setSortModalVisible(true)} className="ml-3 border-l border-slate-200 pl-3">
              <Filter size={18} color={sortOrder !== 'Newest' ? CORAL : NAVY} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowArchived(!showArchived)} className="ml-3 border-l border-slate-200 pl-3">
+             <Archive size={18} color={showArchived ? CORAL : NAVY} />
           </TouchableOpacity>
         </View>
       </View>
@@ -420,7 +425,7 @@ export default function NotesScreen() {
                        <Pin size={16} color={selectedNote.isPinned ? '#d97706' : '#94a3b8'} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={handleToggleArchive} className={`p-2 rounded-full ${selectedNote.isArchived ? 'bg-amber-100' : 'bg-slate-50'}`}>
-                       <Archive size={16} color={selectedNote.isArchived ? '#d97706' : '#94a3b8'} />
+                       {selectedNote.isArchived ? <ArchiveRestore size={16} color="#d97706" /> : <Archive size={16} color="#94a3b8" />}
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} className="p-2 ml-1">
                        <Trash2 size={16} color="#ef4444" />
@@ -567,6 +572,7 @@ function NoteItem({ note, onPress }: { note: any; onPress: () => void }) {
       <View className="flex-row justify-between items-start mb-2">
         <View className="flex-1 mr-3 flex-row items-center">
           {note.isPinned && <Pin size={14} color="#d97706" className="mr-2" />}
+          {note.isArchived && <Archive size={14} color="#94a3b8" className="mr-2" />}
           <Text className="text-[16px] font-bold text-navy pr-2 leading-6" style={{ color: NAVY }} numberOfLines={1}>
             {note.title || 'Untitled Log'}
           </Text>

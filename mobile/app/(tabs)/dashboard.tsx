@@ -47,13 +47,129 @@ const IconUsers = ({ color = 'white', size = 24 }) => (
   </Svg>
 );
 
+const IconBell = ({ color = 'white', size = 20 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <Path d="M13.73 21a2 2 0 0 1-3.46 0" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
 const LOG_ITEMS = [
   { id: 1, text: 'Scheduled email to HR',      time: '2 hours ago',          Icon: IconMail,     iconColor: '#e87a6e', bg: '#fff0ee' },
   { id: 2, text: 'Meeting added: Design Sync',  time: 'Yesterday · 4:12 PM',  Icon: IconCalendar, iconColor: '#6366f1', bg: '#eef0ff' },
   { id: 3, text: 'Secretarial review finished', time: 'Yesterday · 1:45 PM',  Icon: IconCheck,    iconColor: '#10b981', bg: '#ecfdf5' },
 ];
 
-const THEME_BLUE = '#111827'; 
+const THEME_BLUE = '#111827';
+
+const InvitesModal = ({
+  visible,
+  onClose,
+  invites,
+  onAccept,
+  onReject,
+  loadingInvites,
+  acceptingId,
+  rejectingId,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  invites: Array<{ groupId: string; groupName: string; groupDescription?: string }>;
+  onAccept: (groupId: string) => void;
+  onReject: (groupId: string) => void;
+  loadingInvites: boolean;
+  acceptingId?: string;
+  rejectingId?: string;
+}) => (
+  <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }} onPress={onClose}>
+      <Pressable style={{ backgroundColor: '#16161f', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, maxHeight: '85%' }}>
+        <View style={{ width: 40, height: 4, backgroundColor: '#ffffff20', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
+        <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 6 }}>Department Invites</Text>
+        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 24 }}>
+          {invites.length === 0 ? 'You have no pending department invites' : `You have ${invites.length} pending invite${invites.length > 1 ? 's' : ''}`}
+        </Text>
+
+        {loadingInvites ? (
+          <View style={{ height: 200, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator color="#e87a6e" size="large" />
+          </View>
+        ) : invites.length === 0 ? (
+          <View style={{ height: 100, justifyContent: 'center', alignItems: 'center' }}>
+            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12 }}>No invites to display</Text>
+          </View>
+        ) : (
+          <ScrollView style={{ maxHeight: 400, marginBottom: 16 }} showsVerticalScrollIndicator={false}>
+            {invites.map((invite) => (
+              <View
+                key={invite.groupId}
+                style={{
+                  backgroundColor: '#0d1117',
+                  borderWidth: 1,
+                  borderColor: '#2b2f3a',
+                  borderRadius: 14,
+                  padding: 16,
+                  marginBottom: 12,
+                }}
+              >
+                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700', marginBottom: 4 }}>{invite.groupName}</Text>
+                {invite.groupDescription && (
+                  <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginBottom: 12 }}>{invite.groupDescription}</Text>
+                )}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity
+                    onPress={() => onReject(invite.groupId)}
+                    disabled={rejectingId === invite.groupId}
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: '#ff6b6b',
+                      borderRadius: 10,
+                      paddingVertical: 10,
+                      alignItems: 'center',
+                      opacity: rejectingId === invite.groupId ? 0.6 : 1,
+                    }}
+                  >
+                    {rejectingId === invite.groupId ? (
+                      <ActivityIndicator color="#ff6b6b" size="small" />
+                    ) : (
+                      <Text style={{ color: '#ff6b6b', fontWeight: '600', fontSize: 13 }}>Reject</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => onAccept(invite.groupId)}
+                    disabled={acceptingId === invite.groupId}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#06b6d4',
+                      borderRadius: 10,
+                      paddingVertical: 10,
+                      alignItems: 'center',
+                      opacity: acceptingId === invite.groupId ? 0.7 : 1,
+                    }}
+                  >
+                    {acceptingId === invite.groupId ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Accept</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        )}
+
+        <TouchableOpacity
+          onPress={onClose}
+          style={{ backgroundColor: '#2b2f3a', borderRadius: 12, paddingVertical: 13, alignItems: 'center' }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>Close</Text>
+        </TouchableOpacity>
+      </Pressable>
+    </Pressable>
+  </Modal>
+);
 
 const CreateGroupModal = ({
   visible,
@@ -125,6 +241,21 @@ export default function DashboardScreen() {
 
   const { data: tasks, isLoading: isTasksLoading } = trpc.task.getTasks.useQuery();
   const { data: groups = [], refetch: refetchGroups } = trpc.group.getGroups.useQuery();
+  const { data: invites = [], refetch: refetchInvites, isLoading: isInvitesLoading } = trpc.group.getInvites.useQuery();
+  
+  const acceptInviteMutation = trpc.group.acceptInvite.useMutation({
+    onSuccess: () => {
+      refetchInvites();
+      refetchGroups();
+    },
+  });
+
+  const rejectInviteMutation = trpc.group.rejectInvite.useMutation({
+    onSuccess: () => {
+      refetchInvites();
+    },
+  });
+
   const createGroupMutation = trpc.group.createGroup.useMutation({
     onSuccess: () => {
       setShowCreateGroupModal(false);
@@ -135,10 +266,12 @@ export default function DashboardScreen() {
   });
 
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [showInvitesModal, setShowInvitesModal] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [groupDesc, setGroupDesc] = useState('');
 
   const isLoading = isUserLoading || isTasksLoading;
+  const inviteCount = invites?.length ?? 0;
 
   const handleCreateGroup = () => {
     if (!groupName.trim()) return;
@@ -165,6 +298,24 @@ export default function DashboardScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#f6f5f3' }}>
       <StatusBar barStyle="light-content" backgroundColor={THEME_BLUE} />
+      <InvitesModal
+        visible={showInvitesModal}
+        onClose={() => setShowInvitesModal(false)}
+        invites={invites.map((invite: any) => ({
+          groupId: invite.groupId,
+          groupName: invite.group?.name || 'Unknown Department',
+          groupDescription: invite.group?.description,
+        }))}
+        onAccept={(groupId) => {
+          acceptInviteMutation.mutate({ groupId });
+        }}
+        onReject={(groupId) => {
+          rejectInviteMutation.mutate({ groupId });
+        }}
+        loadingInvites={isInvitesLoading}
+        acceptingId={acceptInviteMutation.variables?.groupId}
+        rejectingId={rejectInviteMutation.variables?.groupId}
+      />
       <CreateGroupModal
         visible={showCreateGroupModal}
         onClose={() => setShowCreateGroupModal(false)}
@@ -192,17 +343,40 @@ export default function DashboardScreen() {
                   {user?.name || 'xyz'}
                 </Text>
               </View>
-              <View style={{ position: 'relative' }}>
-                <View className="w-[52px] h-[52px] rounded-[18px] bg-[#e87a6e] items-center justify-center border border-white/10">
-                  <Text className="text-white text-[16px] font-black">{initials}</Text>
-                </View>
-                <View style={{
-                  position: 'absolute', top: -5, right: -5,
-                  width: 20, height: 20, borderRadius: 10,
-                  backgroundColor: '#ff3b30', borderWidth: 3, borderColor: THEME_BLUE,
-                  alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Text className="text-white text-[9px] font-black">3</Text>
+              <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                {/* Bell Icon */}
+                <TouchableOpacity
+                  onPress={() => setShowInvitesModal(true)}
+                  style={{ position: 'relative' }}
+                >
+                  <View className="w-[52px] h-[52px] rounded-[18px] bg-white/10 items-center justify-center border border-white/20">
+                    <IconBell color="white" size={22} />
+                  </View>
+                  {inviteCount > 0 && (
+                    <View style={{
+                      position: 'absolute', top: -8, right: -8,
+                      width: 24, height: 24, borderRadius: 12,
+                      backgroundColor: '#ff3b30', borderWidth: 3, borderColor: THEME_BLUE,
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Text className="text-white text-[10px] font-black">{inviteCount}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {/* Profile Icon */}
+                <View style={{ position: 'relative' }}>
+                  <View className="w-[52px] h-[52px] rounded-[18px] bg-[#e87a6e] items-center justify-center border border-white/10">
+                    <Text className="text-white text-[16px] font-black">{initials}</Text>
+                  </View>
+                  <View style={{
+                    position: 'absolute', top: -5, right: -5,
+                    width: 20, height: 20, borderRadius: 10,
+                    backgroundColor: '#ff3b30', borderWidth: 3, borderColor: THEME_BLUE,
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Text className="text-white text-[9px] font-black">3</Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -332,19 +506,7 @@ export default function DashboardScreen() {
               </View>
             </TouchableOpacity>
             {/* AI banner */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={{ padding: 18, flexDirection: 'row', alignItems: 'center', marginBottom: 24, backgroundColor: THEME_BLUE, borderRadius: 24 }}
-            >
-              <View className="w-11 h-11 rounded-[15px] bg-[#e87a6e] items-center justify-center mr-4">
-                <IconBolt color="white" size={20} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text className="text-white text-[14px] font-extrabold mb-0.5">3 follow-ups due this week</Text>
-                <Text className="text-white/40 text-[11px] font-semibold">Tap to review & auto-draft replies</Text>
-              </View>
-              <Text className="text-white/20 text-[22px] ml-2">›</Text>
-            </TouchableOpacity>
+
 
             {/* Log */}
             <Text className="text-[11px] font-extrabold text-[#9ca3af] uppercase mb-4 ml-1" style={{ letterSpacing: 1.4 }}>

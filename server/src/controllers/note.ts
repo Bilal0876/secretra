@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { z } from 'zod';
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure } from '../trpcBase';
 import { PrismaClient } from '@ps/db';
 
 const prisma = new PrismaClient();

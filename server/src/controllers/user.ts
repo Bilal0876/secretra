@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server'; 
 
-import { router, publicProcedure, protectedProcedure } from '../trpc';
+import { router, publicProcedure, protectedProcedure } from '../trpcBase';
 import { PrismaClient } from '@ps/db';
 import { AuthService } from '../services/auth.service';
 

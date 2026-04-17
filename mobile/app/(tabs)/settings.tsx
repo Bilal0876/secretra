@@ -375,7 +375,7 @@ export default function ProfileScreen() {
             <Row label="Delete Account" sublabel="Permanently remove all data" IconComp={Icon.Trash} iconColor="#ef4444" iconBg="#fef2f2" onPress={handleDeleteAccount} danger isFirst isLast />
           </View>
 
-          <Text style={{ color: '#c4bfb8', fontSize: 11, textAlign: 'center', marginTop: 32 }}>Version 1.0.0</Text>
+          <Text style={{ color: '#c4bfb8', fontSize: 11, textAlign: 'center', marginTop: 60 }}>Version 1.0.0</Text>
         </View>
       </ScrollView>
     </View>

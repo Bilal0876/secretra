@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure } from '../trpcBase';
 import { PrismaClient, EventPriority, EventStatus } from '@ps/db';
 
 const prisma = new PrismaClient();
@@ -47,6 +47,53 @@ export const calendarRouter = router({
         where: {
           userId: ctx.user.id,
           ...(input?.groupId ? { groupId: input.groupId } : {}),
+          ...(input?.startDate || input?.endDate ? {
+            startAt: {
+              ...(input.startDate ? { gte: new Date(input.startDate) } : {}),
+              ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
+            }
+          } : {}),
+        },
+        orderBy: { startAt: 'asc' },
+        include: {
+          group: true,
+        },
+      });
+    }),
+
+  // Get team member's calendar (only if they're in a shared group)
+  getTeamMemberCalendar: protectedProcedure
+    .input(z.object({
+      memberId: z.string().uuid(),
+      groupId: z.string().uuid(),
+      startDate: z.string().datetime().optional(),
+      endDate: z.string().datetime().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      // Verify both users are members of the same group
+      const [currentUserInGroup, targetUserInGroup] = await Promise.all([
+        prisma.groupMember.findFirst({
+          where: {
+            groupId: input.groupId,
+            userId: ctx.user.id,
+          },
+        }),
+        prisma.groupMember.findFirst({
+          where: {
+            groupId: input.groupId,
+            userId: input.memberId,
+          },
+        }),
+      ]);
+
+      if (!currentUserInGroup || !targetUserInGroup) {
+        throw new Error('Access denied: Both users must be in the same group');
+      }
+
+      // Get the member's events
+      return prisma.event.findMany({
+        where: {
+          userId: input.memberId,
           ...(input?.startDate || input?.endDate ? {
             startAt: {
               ...(input.startDate ? { gte: new Date(input.startDate) } : {}),
