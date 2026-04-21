@@ -3,146 +3,83 @@ import { router, protectedProcedure } from '../trpcBase';
 import { EventPriority, EventStatus, GroupMemberStatus } from '@ps/db';
 import prisma from '../shared/prisma';
 import { emitSignal } from '../socket';
+import { checkConflicts } from '../services/conflictService';
+
+function formatTime(date: Date) {
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
 
 // Explicitly define schemas to help TS inference in some IDE environments
 const eventInputSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   location: z.string().optional(),
-  groupId: z.string().uuid().optional(),
-  attendeeIds: z.array(z.string().uuid()).optional(), // New field
   eventType: z.string().default('event'),
-  startAt: z.string().datetime(),
-  endAt: z.string().datetime(),
-  isAllDay: z.boolean().default(false),
   priority: z.nativeEnum(EventPriority).default(EventPriority.medium),
   status: z.nativeEnum(EventStatus).default(EventStatus.confirmed),
-  googleEventId: z.string().optional(),
+  startAt: z.string().datetime(),
+  endAt: z.string().datetime(),
+  groupId: z.string().uuid().optional(),
+  attendeeIds: z.array(z.string().uuid()).optional(),
 });
 
-const eventUpdateSchema = z.object({
+const eventUpdateSchema = eventInputSchema.extend({
   id: z.string().uuid(),
-  groupId: z.string().uuid().optional(),
-  attendeeIds: z.array(z.string().uuid()).optional(), // New field
-  eventType: z.string().default('event'),
   title: z.string().optional(),
-  description: z.string().optional(),
-  location: z.string().optional(),
   startAt: z.string().datetime().optional(),
   endAt: z.string().datetime().optional(),
-  isAllDay: z.boolean().optional(),
-  priority: z.nativeEnum(EventPriority).optional(),
-  status: z.nativeEnum(EventStatus).optional(),
-  googleEventId: z.string().optional(),
-});
-
-const dashboardOverviewSchema = z.object({
-  todayCount: z.number(),
-  nextEvent: z.any().nullable(), // Simplifying for now to ensure type propagation
 });
 
 export const calendarRouter = router({
-  // Get dashboard overview stats
-  getDashboardOverview: protectedProcedure
-    .output(dashboardOverviewSchema)
-    .query(async ({ ctx }) => {
-      const now = new Date();
-      const endOfToday = new Date(now);
-      endOfToday.setHours(23, 59, 59, 999);
-
-      const [todayEvents, nextEvents] = await Promise.all([
-        prisma.event.findMany({
-          where: {
-            OR: [
-              { userId: ctx.user.id },
-              { attendees: { some: { id: ctx.user.id } } },
-            ],
-            startAt: { gte: now, lte: endOfToday },
-          } as any,
-        }),
-        prisma.event.findMany({
-          where: {
-            OR: [
-              { userId: ctx.user.id },
-              { attendees: { some: { id: ctx.user.id } } },
-            ],
-            startAt: { gt: now },
-          } as any,
-          orderBy: { startAt: 'asc' },
-          take: 1,
-          include: { 
-            group: { select: { name: true } },
-            attendees: { select: { id: true, name: true, avatarUrl: true } },
-          },
-        }),
-      ]);
-
-      return {
-        todayCount: todayEvents.length,
-        nextEvent: (nextEvents[0] as any) || null,
-      };
-    }),
-
   // Get all events for the current user
   getEvents: protectedProcedure
     .input(z.object({
+      groupId: z.string().uuid().optional(),
       startDate: z.string().datetime().optional(),
       endDate: z.string().datetime().optional(),
-      groupId: z.string().uuid().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
+      const filters: any = {
+        OR: [
+          { userId: ctx.user.id },
+          { attendees: { some: { id: ctx.user.id } } },
+        ],
+      };
+
+      if (input?.groupId) {
+        filters.groupId = input.groupId;
+      }
+
+      if (input?.startDate || input?.endDate) {
+        filters.startAt = {
+          ...(input.startDate ? { gte: new Date(input.startDate) } : {}),
+          ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
+        };
+      }
+
       return prisma.event.findMany({
-        where: {
-          OR: [
-            { userId: ctx.user.id },
-            { groupId: input?.groupId },
-            { attendees: { some: { id: ctx.user.id } } }, // Also see events I'm attending
-          ],
-          ...(input?.startDate || input?.endDate ? {
-            startAt: {
-              ...(input.startDate ? { gte: new Date(input.startDate) } : {}),
-              ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
-            }
-          } : {}),
-        } as any,
+        where: filters,
         orderBy: { startAt: 'asc' },
         include: {
           group: true,
-          ...({ attendees: { select: { id: true, name: true, avatarUrl: true } } } as any),
+          user: { select: { name: true } },
         },
       });
     }),
 
-  // Get team member's calendar (only if they're in a shared group)
+  // Get events for a specific member in a group context
   getTeamMemberCalendar: protectedProcedure
     .input(z.object({
-      memberId: z.string().uuid(),
       groupId: z.string().uuid(),
+      memberId: z.string().uuid(),
       startDate: z.string().datetime().optional(),
       endDate: z.string().datetime().optional(),
     }))
-    .query(async ({ ctx, input }) => {
-      // Verify both users are members of the same group
-      const [currentUserInGroup, targetUserInGroup] = await Promise.all([
-        prisma.groupMember.findFirst({
-          where: {
-            groupId: input.groupId,
-            userId: ctx.user.id,
-          },
-        }),
-        prisma.groupMember.findFirst({
-          where: {
-            groupId: input.groupId,
-            userId: input.memberId,
-          },
-        }),
-      ]);
-
-      if (!currentUserInGroup || !targetUserInGroup) {
-        throw new Error('Access denied: Both users must be in the same group');
-      }
-
-      // Get the member's events (where they are owner OR attendee)
+    .query(async ({ input }) => {
       const events = await prisma.event.findMany({
         where: {
           OR: [
@@ -178,29 +115,15 @@ export const calendarRouter = router({
       const start = new Date(startAt);
       const end = new Date(endAt);
 
-      // 🚨 TARGETED CONFLICT DETECTION 🚨
-      // We check for the owner AND specified attendees
+      // 🚨 UNIFIED CONFLICT DETECTION 🚨
       const targetUserIds = [ctx.user.id, ...(attendeeIds || [])];
 
-      const conflictingEvents = await prisma.event.findMany({
-        where: {
-          OR: [
-            { userId: { in: targetUserIds } },
-            { attendees: { some: { id: { in: targetUserIds } } } },
-          ],
-          AND: [
-            { startAt: { lt: end } },
-            { endAt: { gt: start } },
-          ],
-        } as any,
-        include: { user: { select: { name: true } } } as any,
-      });
+      const conflicts = await checkConflicts(targetUserIds, start, end);
 
-      if (conflictingEvents.length > 0) {
-        const busyNames = [...new Set(conflictingEvents.map((e: any) => 
-          e.userId === ctx.user.id ? 'You' : (e.user?.name || 'a participant')
+      if (conflicts.length > 0) {
+        const busyNames = [...new Set(conflicts.map((c: any) => 
+          c.userId === ctx.user.id ? 'You' : (c.userName || 'a participant')
         ))];
-        // Move "You" to the front if it exists
         if (busyNames.includes('You')) {
           const idx = busyNames.indexOf('You');
           busyNames.splice(idx, 1);
@@ -209,7 +132,8 @@ export const calendarRouter = router({
         const namesStr = busyNames.length > 1 
           ? busyNames.slice(0, -1).join(', ') + ' & ' + busyNames.slice(-1)
           : busyNames[0];
-        throw new Error(`Conflict! ${namesStr} ${busyNames.length > 1 ? 'are' : 'is'} already busy during this time.`);
+        
+        throw new Error(`Conflict! ${namesStr} ${busyNames.length > 1 ? 'are' : 'is'} busy from ${formatTime(conflicts[0].start)} to ${formatTime(conflicts[0].end)}.`);
       }
 
       const event = await prisma.event.create({
@@ -254,29 +178,14 @@ export const calendarRouter = router({
       const start = startAt ? new Date(startAt) : existing.startAt;
       const end = endAt ? new Date(endAt) : existing.endAt;
 
-      // Conflict check for owner + new attendee list
+      // Unified Conflict check for owner + new attendee list
       const targetUserIds = [ctx.user.id, ...(attendeeIds || [])];
 
-      const conflictingEvents = await prisma.event.findMany({
-        where: {
-          AND: [
-            {
-              OR: [
-                { userId: { in: targetUserIds } },
-                { attendees: { some: { id: { in: targetUserIds } } } },
-              ],
-            },
-            { startAt: { lt: end } },
-            { endAt: { gt: start } },
-            { NOT: { id } },
-          ],
-        } as any,
-        include: { user: { select: { name: true } } } as any,
-      });
+      const conflicts = await checkConflicts(targetUserIds, start, end, { excludeEventId: id });
 
-      if (conflictingEvents.length > 0) {
-        const busyNames = [...new Set(conflictingEvents.map((e: any) => 
-          e.userId === ctx.user.id ? 'You' : (e.user?.name || 'a participant')
+      if (conflicts.length > 0) {
+        const busyNames = [...new Set(conflicts.map((c: any) => 
+          c.userId === ctx.user.id ? 'You' : (c.userName || 'a participant')
         ))];
         if (busyNames.includes('You')) {
           const idx = busyNames.indexOf('You');
@@ -286,7 +195,7 @@ export const calendarRouter = router({
         const namesStr = busyNames.length > 1 
           ? busyNames.slice(0, -1).join(', ') + ' & ' + busyNames.slice(-1)
           : busyNames[0];
-        throw new Error(`Update conflict! ${namesStr} ${busyNames.length > 1 ? 'are' : 'is'} busy during this time.`);
+        throw new Error(`Update conflict! ${namesStr} ${busyNames.length > 1 ? 'are' : 'is'} busy from ${formatTime(conflicts[0].start)} to ${formatTime(conflicts[0].end)}.`);
       }
 
       const updatedEvent = await prisma.event.update({
@@ -368,44 +277,46 @@ export const calendarRouter = router({
         .map((m) => m.userId)
         .filter((id): id is string => id !== null);
 
-      const events = await prisma.event.findMany({
-        where: {
-          OR: [
-            { userId: { in: memberIds } },
-            { attendees: { some: { id: { in: memberIds } } } },
-          ],
-          AND: [
-            { startAt: { lt: end } },
-            { endAt: { gt: start } },
-          ],
-        } as any,
-        select: {
-          userId: true,
-          title: true,
-          startAt: true,
-          endAt: true,
-          groupId: true,
-          attendees: { select: { id: true } },
-        },
-      });
+      const allConflicts = await checkConflicts(memberIds, start, end);
 
       return members.map((member) => {
         const mId = member.user?.id || member.userId;
-        const memberEvents = events
-          .filter((e: any) => e.userId === mId || e.attendees?.some((a: any) => a.id === mId))
-          .map(e => ({
-            ...e,
-            // Privacy: Redact title if event belongs to a different group
-            title: e.groupId === groupId ? e.title : 'Busy (Private Event)',
-          }));
+        const memberConflicts = allConflicts.filter((c: any) => c.userId === mId);
 
         return {
           userId: member.user?.id,
           name: member.user?.name,
           avatarUrl: member.user?.avatarUrl,
-          isBusy: memberEvents.length > 0,
-          conflictingEvents: memberEvents,
+          isBusy: memberConflicts.length > 0,
+          conflictingEvents: memberConflicts.map(c => ({
+            ...c,
+            // Privacy: Redact title if event belongs to a different group (or no group) or is a task
+            title: (c.type === 'event' && c.groupId === groupId) ? c.title : `Busy (${c.type === 'task' ? 'Task' : 'Private Event'})`,
+          })),
         };
       });
+    }),
+
+  // Get a summary overview for the dashboard
+  getDashboardOverview: protectedProcedure
+    .query(async ({ ctx }) => {
+      const now = new Date();
+      const nextEvent = await prisma.event.findFirst({
+        where: {
+          OR: [
+            { userId: ctx.user.id },
+            { attendees: { some: { id: ctx.user.id } } },
+          ],
+          startAt: { gte: now },
+        },
+        orderBy: { startAt: 'asc' },
+        include: {
+          group: { select: { name: true } },
+        },
+      });
+
+      return {
+        nextEvent,
+      };
     }),
 });

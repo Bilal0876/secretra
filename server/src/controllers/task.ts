@@ -2,6 +2,15 @@ import { z } from 'zod';
 import { router, protectedProcedure } from '../trpcBase';
 import { TaskPriority, TaskStatus } from '@ps/db';
 import prisma from '../shared/prisma';
+import { checkConflicts } from '../services/conflictService';
+
+function formatTime(date: Date) {
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
 
 export const taskRouter = router({
   // Get all tasks for the current user
@@ -43,12 +52,23 @@ export const taskRouter = router({
         ? String.fromCharCode(lastTask.sortOrder.charCodeAt(lastTask.sortOrder.length - 1) + 1)
         : 'n';
 
+      const start = input.startDate ? new Date(input.startDate) : null;
+      const end = input.dueDate ? new Date(input.dueDate) : null;
+
+      if (start && end) {
+        const conflicts = await checkConflicts([ctx.user.id], start, end);
+        if (conflicts.length > 0) {
+          const first = conflicts[0];
+          throw new Error(`Conflict! You have "${first.title}" from ${formatTime(first.start)} to ${formatTime(first.end)}.`);
+        }
+      }
+
       return prisma.task.create({
         data: {
           ...input,
           userId: ctx.user.id,
-          startDate: input.startDate ? new Date(input.startDate) : null,
-          dueDate: input.dueDate ? new Date(input.dueDate) : null,
+          startDate: start,
+          dueDate: end,
           sortOrder: nextOrder,
         },
       });
@@ -69,12 +89,23 @@ export const taskRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
 
+      const start = data.startDate ? new Date(data.startDate) : (data.startDate === null ? null : undefined);
+      const end = data.dueDate ? new Date(data.dueDate) : (data.dueDate === null ? null : undefined);
+
+      if (start && end) {
+        const conflicts = await checkConflicts([ctx.user.id], start, end, { excludeTaskId: id });
+        if (conflicts.length > 0) {
+          const first = conflicts[0];
+          throw new Error(`Update failed: Conflict with "${first.title}" from ${formatTime(first.start)} to ${formatTime(first.end)}.`);
+        }
+      }
+
       return prisma.task.update({
         where: { id, userId: ctx.user.id },
         data: {
           ...data,
-          startDate: data.startDate ? new Date(data.startDate) : (data.startDate === null ? null : undefined),
-          dueDate: data.dueDate ? new Date(data.dueDate) : (data.dueDate === null ? null : undefined),
+          startDate: start,
+          dueDate: end,
         },
       });
     }),

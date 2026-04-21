@@ -3,6 +3,14 @@
     "name": "Secretra",
     "slug": "personal-secretary-hr",
     "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#111827"
+    },
     "scheme": "com.bilal.secretra",
     "web": {
       "bundler": "metro"
@@ -18,6 +26,10 @@
     "android": {
       "package": "com.bilal.secretra",
       "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#111827"
+      },
       "intentFilters": [
         {
           "action": "VIEW",

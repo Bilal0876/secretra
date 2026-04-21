@@ -134,6 +134,7 @@ interface Props {
 
 export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, readOnly }: Props) {
     const utils = trpc.useUtils();
+    const { data: currentUser } = trpc.profile.me.useQuery();
 
     const [eventType, setEventType] = useState('meeting');
     const [customType, setCustomType] = useState('');
@@ -160,14 +161,17 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
     const [showEndPicker, setShowEndPicker] = useState(false);
     const [reminderMinutes, setReminderMinutes] = useState<number | null>(null);
 
+    const lastInitRef = useRef<string | null>(null);
+    const prevVisibleRef = useRef(false);
     const bottomSheetRef = useRef<BottomSheetModal>(null);
 
     useEffect(() => {
-        if (visible) {
+        if (visible && !prevVisibleRef.current) {
             bottomSheetRef.current?.present();
-        } else {
+        } else if (!visible && prevVisibleRef.current) {
             bottomSheetRef.current?.dismiss();
         }
+        prevVisibleRef.current = visible;
     }, [visible]);
 
     const handleSheetChanges = useCallback((index: number) => {
@@ -201,10 +205,18 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
         }
     );
 
-    // Only show busy status for SELECTED attendees
-    const busyMembers = (availability as any[]).filter((m: any) =>
-        m.isBusy && selectedAttendeeIds.includes(m.userId)
+    // Personal usage conflict check (for when no group is selected)
+    const personalConflicts = trpc.calendar.getEvents.useQuery(
+        { startDate: startAt.toISOString(), endDate: endAt.toISOString() },
+        { enabled: !selectedGroupId && visible }
     );
+
+    // Only show busy status for SELECTED attendees OR myself
+    const busyMembers = (availability as any[]).filter((m: any) =>
+        m.isBusy && (selectedAttendeeIds.includes(m.userId) || m.userId === currentUser?.id)
+    );
+
+    const hasPersonalConflict = !selectedGroupId && (personalConflicts.data?.length ?? 0) > 0;
 
     const { mutate: createEvent, isPending: isCreating } = trpc.calendar.createEvent.useMutation({
         onSuccess: () => {
@@ -229,7 +241,12 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
     const isPending = isCreating || isUpdating;
 
     useEffect(() => {
-        if (visible) {
+        // Only initialize if we just became visible OR if the event identity changed
+        const currentId = eventToEdit?.id || 'new';
+        const justOpened = visible && !lastInitRef.current;
+        const eventChanged = visible && eventToEdit && lastInitRef.current !== currentId;
+
+        if (justOpened || eventChanged) {
             if (eventToEdit) {
                 const eventTypeKey = EVENT_TYPES.some((t) => t.key === eventToEdit.eventType)
                     ? eventToEdit.eventType
@@ -246,11 +263,32 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                 setEnd(new Date(eventToEdit.endAt));
                 setEventType(eventTypeKey);
                 setCustomType(eventTypeKey === 'other' ? (eventToEdit.eventType ?? '') : '');
-            } else if (initialGroupId) {
-                setSelectedGroupId(initialGroupId);
-                // Users must now manually select attendees, so we leave this empty
+            } else {
+                // Reset for NEW event
+                setTitle('');
+                setDesc('');
+                setLocation('');
+                setSelectedGroupId(initialGroupId || null);
                 setSelectedAttendeeIds([]);
+                setIsAllDay(false);
+                setPriority('medium');
+                setEventType('meeting');
+                setCustomType('');
+                
+                const d = new Date();
+                d.setMinutes(0, 0, 0);
+                d.setHours(d.getHours() + 1);
+                setStart(d);
+                
+                const de = new Date(d);
+                de.setHours(de.getHours() + 1);
+                setEnd(de);
             }
+            lastInitRef.current = currentId;
+        }
+
+        if (!visible) {
+            lastInitRef.current = null;
         }
     }, [visible, eventToEdit, initialGroupId]);
 
@@ -503,14 +541,23 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                             )}
 
                             {/* Busy Members Warning */}
-                            {busyMembers.length > 0 && !readOnly && (
+                            {(busyMembers.length > 0 || hasPersonalConflict) && !readOnly && (
                                 <View className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex-row items-start gap-3">
                                     <Bell size={16} color="#d97706" style={{ marginTop: 2 }} />
                                     <View className="flex-1">
-                                        <Text className="text-[13px] font-bold text-amber-800">Busy Members Alert</Text>
-                                        <Text className="text-[12px] text-amber-700 mt-1">
-                                            {busyMembers.map(m => m.name).join(', ')} {busyMembers.length === 1 ? 'is' : 'are'} already busy at this time.
-                                        </Text>
+                                        <Text className="text-[13px] font-bold text-amber-800">Schedule Conflict</Text>
+                                        <View className="mt-1">
+                                            {hasPersonalConflict && (
+                                                <Text className="text-[12px] text-amber-700">
+                                                    • You already have an event scheduled during this time.
+                                                </Text>
+                                            )}
+                                            {busyMembers.map((m, idx) => (
+                                                <Text key={idx} className="text-[12px] text-amber-700">
+                                                    • {m.userId === currentUser?.id ? 'You' : m.name} {m.userId === currentUser?.id ? 'have' : 'has'} {m.conflictingEvents.length} overlap{m.conflictingEvents.length > 1 ? 's' : ''}
+                                                </Text>
+                                            ))}
+                                        </View>
                                     </View>
                                 </View>
                             )}
@@ -612,7 +659,10 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                         mode="time"
                         is24Hour={false}
                         display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        onChange={(_, date) => { setShowStartPicker(false); if (date) setStart(date); }}
+                        onChange={(_, date) => { 
+                            if (Platform.OS === 'android') setShowStartPicker(false); 
+                            if (date) setStart(date); 
+                        }}
                     />
                 )}
                 {showEndPicker && (
@@ -621,7 +671,10 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                         mode="time"
                         is24Hour={false}
                         display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        onChange={(_, date) => { setShowEndPicker(false); if (date) setEnd(date); }}
+                        onChange={(_, date) => { 
+                            if (Platform.OS === 'android') setShowEndPicker(false); 
+                            if (date) setEnd(date); 
+                        }}
                     />
                 )}
             

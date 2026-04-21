@@ -12,14 +12,15 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { 
-  BottomSheetModal, 
-  BottomSheetView, 
-  BottomSheetScrollView, 
-  BottomSheetTextInput, 
-  BottomSheetBackdrop 
+import {
+  BottomSheetModal,
+  BottomSheetView,
+  BottomSheetScrollView,
+  BottomSheetTextInput,
+  BottomSheetBackdrop,
 } from '@gorhom/bottom-sheet';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { AlertCircle } from 'lucide-react-native';
@@ -28,14 +29,19 @@ import { AddEventModal } from '../../components/AddEventModal';
 
 const NAVY = '#111827';
 const CORAL = '#e87a6e';
+const SURFACE = '#f6f5f3';
+const MUTED = '#9ca3af';
+const BORDER = '#f0eeec';
 
-const IconBack = ({ color = '#111827', size = 20 }) => (
+// ── Icons ──
+
+const IconBack = ({ color = '#111827', size = 18 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Path d="M15 18l-6-6 6-6" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
 );
 
-const IconPlus = ({ color = '#fff', size = 16 }) => (
+const IconPlus = ({ color = '#fff', size = 15 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Path d="M12 5v14M5 12h14" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
   </Svg>
@@ -49,14 +55,7 @@ const IconRemoveUser = ({ color = '#ef4444', size = 16 }) => (
   </Svg>
 );
 
-const IconUser = ({ color = '#6b7280', size = 20 }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <Circle cx="12" cy="8" r="4" stroke={color} strokeWidth="2" />
-    <Path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke={color} strokeWidth="2" strokeLinecap="round" />
-  </Svg>
-);
-
-const IconUsersGroup = ({ size = 40, color = '#16a34a' }) => (
+const IconUsersGroup = ({ size = 28, color = '#16a34a' }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Circle cx="9" cy="7" r="3" stroke={color} strokeWidth="1.6" />
     <Path d="M3 19c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
@@ -72,25 +71,27 @@ const IconCalendar = ({ color = '#06b6d4', size = 18 }) => (
   </Svg>
 );
 
-const IconEdit = ({ color = '#6b7280', size = 18 }) => (
+const IconEdit = ({ color = '#6b7280', size = 17 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     <Path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
 );
 
-const IconLogOut = ({ color = '#ef4444', size = 18 }) => (
+const IconLogOut = ({ color = '#ef4444', size = 17 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
 );
 
-const IconCamera = ({ color = '#6b7280', size = 18 }) => (
+const IconCamera = ({ color = '#fff', size = 14 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     <Circle cx="12" cy="13" r="4" stroke={color} strokeWidth="2" />
   </Svg>
 );
+
+// ── Avatar ──
 
 const AVATAR_COLORS = [
   { bg: '#ede9fe', text: '#7c3aed' },
@@ -101,54 +102,126 @@ const AVATAR_COLORS = [
   { bg: '#e0f2fe', text: '#0284c7' },
 ];
 
-const AvatarInitials = ({ email, size = 44 }: { email: string; size?: number }) => {
+const AvatarInitials = ({ email, size = 40 }: { email: string; size?: number }) => {
   const initials = email.slice(0, 2).toUpperCase();
   const color = AVATAR_COLORS[email.charCodeAt(0) % AVATAR_COLORS.length];
-  const fontSize = size * 0.34;
   return (
     <View style={{
       width: size, height: size, borderRadius: size / 2,
       backgroundColor: color.bg, alignItems: 'center', justifyContent: 'center',
     }}>
-      <Text style={{ color: color.text, fontWeight: '700', fontSize }}>{initials}</Text>
+      <Text style={{ color: color.text, fontWeight: '700', fontSize: size * 0.32 }}>{initials}</Text>
     </View>
   );
 };
 
-// ── Modals ──
+// ── Shared sheet helpers ──
 
 const renderBackdrop = (props) => (
-  <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.6} />
+  <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.45} />
 );
+
+const SheetLabel = ({ children }) => (
+  <Text style={{ fontSize: 11, fontWeight: '700', color: MUTED, textTransform: 'uppercase', letterSpacing: 1.1, marginBottom: 8 }}>
+    {children}
+  </Text>
+);
+
+const SheetInput = ({ style, ...props }) => (
+  <BottomSheetTextInput
+    style={[{
+      backgroundColor: SURFACE,
+      padding: 14,
+      borderRadius: 14,
+      fontSize: 15,
+      color: NAVY,
+      borderWidth: 1,
+      borderColor: BORDER,
+      marginBottom: 16,
+    }, style]}
+    placeholderTextColor={MUTED}
+    {...props}
+  />
+);
+
+const PrimaryButton = ({ onPress, disabled, loading, label, style }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    disabled={disabled || loading}
+    style={[{
+      backgroundColor: NAVY,
+      borderRadius: 14,
+      paddingVertical: 15,
+      alignItems: 'center',
+    }, (disabled || loading) && { opacity: 0.4 }, style]}
+    activeOpacity={0.85}
+  >
+    {loading
+      ? <ActivityIndicator color="white" size="small" />
+      : <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>{label}</Text>}
+  </TouchableOpacity>
+);
+
+const GhostButton = ({ onPress, label }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    style={{ borderRadius: 14, paddingVertical: 15, alignItems: 'center', backgroundColor: SURFACE }}
+    activeOpacity={0.7}
+  >
+    <Text style={{ color: '#64748b', fontWeight: '600', fontSize: 15 }}>{label}</Text>
+  </TouchableOpacity>
+);
+
+// ── Sheet header ──
+const SheetHeader = ({ title, subtitle }) => (
+  <View style={{ marginBottom: 28 }}>
+    <Text style={{ fontSize: 20, fontWeight: '800', color: NAVY, letterSpacing: -0.4 }}>{title}</Text>
+    {subtitle && <Text style={{ color: MUTED, fontSize: 13, marginTop: 4 }}>{subtitle}</Text>}
+  </View>
+);
+
+// ── Danger icon wrapper ──
+const DangerIcon = ({ icon: Icon, iconColor = '#ef4444', size = 20 }) => (
+  <View style={{
+    width: 52, height: 52, borderRadius: 16,
+    backgroundColor: '#fef2f2',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 20, alignSelf: 'center',
+  }}>
+    <Icon size={size} color={iconColor} />
+  </View>
+);
+
+// ── Modals ──
 
 const ConfirmRemoveModal = ({ visible, member, onClose, onConfirm, loading }) => {
   const ref = useRef(null);
   useEffect(() => { if (visible) ref.current?.present(); else ref.current?.dismiss(); }, [visible]);
   return (
     <BottomSheetModal
-      ref={ref}
-      index={0}
-      snapPoints={['100%']}
-      enablePanDownToClose
-      backdropComponent={renderBackdrop}
+      ref={ref} index={0} snapPoints={['40%']}
+      enablePanDownToClose backdropComponent={renderBackdrop}
       onChange={(idx) => { if (idx === -1) onClose(); }}
-      backgroundStyle={{ backgroundColor: 'white', borderRadius: 40 }}
+      backgroundStyle={{ backgroundColor: 'white', borderRadius: 28 }}
+      handleIndicatorStyle={{ backgroundColor: '#e2e8f0', width: 36 }}
     >
-      <BottomSheetView style={{ flex: 1, padding: 32, alignItems: 'center', justifyContent: 'center' }}>
-        <View style={{ width: 50, height: 50, borderRadius: 15, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-          <IconRemoveUser size={22} color="#ef4444" />
-        </View>
-        <Text style={{ fontSize: 20, fontWeight: 'bold', color: NAVY, marginBottom: 8 }}>Remove member?</Text>
-        <Text style={{ color: '#64748b', textAlign: 'center', marginBottom: 32 }}>
-          <Text style={{ fontWeight: 'bold', color: NAVY }}>{member?.email}</Text> will be removed from this department.
+      <BottomSheetView style={{ flex: 1, paddingHorizontal: 28, paddingTop: 8, paddingBottom: 32 }}>
+        <DangerIcon icon={IconRemoveUser} />
+        <Text style={{ fontSize: 17, fontWeight: '800', color: NAVY, textAlign: 'center', marginBottom: 6 }}>Remove member?</Text>
+        <Text style={{ color: MUTED, textAlign: 'center', fontSize: 13, lineHeight: 20, marginBottom: 28 }}>
+          <Text style={{ fontWeight: '700', color: NAVY }}>{member?.email}</Text> will lose access to this department.
         </Text>
-        <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
-          <TouchableOpacity onPress={onClose} style={{ flex: 1, py: 16, borderRadius: 16, backgroundColor: '#f8fafc', alignItems: 'center' }}>
-            <Text style={{ fontWeight: 'bold', color: '#64748b' }}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onConfirm} disabled={loading} style={{ flex: 1, py: 16, borderRadius: 16, backgroundColor: '#ef4444', alignItems: 'center' }}>
-            {loading ? <ActivityIndicator color="white" /> : <Text style={{ fontWeight: 'bold', color: 'white' }}>Remove</Text>}
-          </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <GhostButton onPress={onClose} label="Cancel" />
+          <View style={{ flex: 1 }}>
+            <TouchableOpacity
+              onPress={onConfirm} disabled={loading}
+              style={{ backgroundColor: '#ef4444', borderRadius: 14, paddingVertical: 15, alignItems: 'center', opacity: loading ? 0.6 : 1 }}
+              activeOpacity={0.85}
+            >
+              {loading ? <ActivityIndicator color="white" size="small" /> : <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>Remove</Text>}
+            </TouchableOpacity>
+          </View>
         </View>
       </BottomSheetView>
     </BottomSheetModal>
@@ -160,86 +233,88 @@ const ConfirmLeaveModal = ({ visible, groupName, onClose, onConfirm, loading }) 
   useEffect(() => { if (visible) ref.current?.present(); else ref.current?.dismiss(); }, [visible]);
   return (
     <BottomSheetModal
-      ref={ref}
-      index={0}
-      snapPoints={['100%']}
-      enablePanDownToClose
-      backdropComponent={renderBackdrop}
+      ref={ref} index={0} snapPoints={['40%']}
+      enablePanDownToClose backdropComponent={renderBackdrop}
       onChange={(idx) => { if (idx === -1) onClose(); }}
-      backgroundStyle={{ backgroundColor: 'white', borderRadius: 40 }}
+      backgroundStyle={{ backgroundColor: 'white', borderRadius: 28 }}
+      handleIndicatorStyle={{ backgroundColor: '#e2e8f0', width: 36 }}
     >
-      <BottomSheetView style={{ flex: 1, padding: 32, alignItems: 'center', justifyContent: 'center' }}>
-        <View style={{ width: 50, height: 50, borderRadius: 15, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-          <IconLogOut size={22} color="#ef4444" />
-        </View>
-        <Text style={{ fontSize: 20, fontWeight: 'bold', color: NAVY, marginBottom: 8 }}>Leave department?</Text>
-        <Text style={{ color: '#64748b', textAlign: 'center', marginBottom: 32 }}>
-          You will be removed from <Text style={{ fontWeight: 'bold', color: NAVY }}>{groupName}</Text>.
+      <BottomSheetView style={{ flex: 1, paddingHorizontal: 28, paddingTop: 8, paddingBottom: 32 }}>
+        <DangerIcon icon={IconLogOut} />
+        <Text style={{ fontSize: 17, fontWeight: '800', color: NAVY, textAlign: 'center', marginBottom: 6 }}>Leave department?</Text>
+        <Text style={{ color: MUTED, textAlign: 'center', fontSize: 13, lineHeight: 20, marginBottom: 28 }}>
+          You'll be removed from <Text style={{ fontWeight: '700', color: NAVY }}>{groupName}</Text>.
         </Text>
-        <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
-          <TouchableOpacity onPress={onClose} style={{ flex: 1, py: 16, borderRadius: 16, backgroundColor: '#f8fafc', alignItems: 'center' }}>
-            <Text style={{ fontWeight: 'bold', color: '#64748b' }}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onConfirm} disabled={loading} style={{ flex: 1, py: 16, borderRadius: 16, backgroundColor: '#ef4444', alignItems: 'center' }}>
-            {loading ? <ActivityIndicator color="white" /> : <Text style={{ fontWeight: 'bold', color: 'white' }}>Leave</Text>}
-          </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <GhostButton onPress={onClose} label="Cancel" />
+          <View style={{ flex: 1 }}>
+            <TouchableOpacity
+              onPress={onConfirm} disabled={loading}
+              style={{ backgroundColor: '#ef4444', borderRadius: 14, paddingVertical: 15, alignItems: 'center', opacity: loading ? 0.6 : 1 }}
+              activeOpacity={0.85}
+            >
+              {loading ? <ActivityIndicator color="white" size="small" /> : <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>Leave</Text>}
+            </TouchableOpacity>
+          </View>
         </View>
       </BottomSheetView>
     </BottomSheetModal>
   );
 };
 
-const EditGroupModal = ({ visible, onClose, name, setName, description, setDescription, imageUrl, onPickImage, onTakePhoto, onSave, loading }) => {
+const EditGroupModal = ({ visible, onClose, name, setName, description, setDescription, imageUrl, onPickImage, onSave, loading }) => {
   const ref = useRef(null);
   useEffect(() => { if (visible) ref.current?.present(); else ref.current?.dismiss(); }, [visible]);
   return (
     <BottomSheetModal
-      ref={ref}
-      index={0}
-      snapPoints={['100%']}
-      enablePanDownToClose
-      keyboardBehavior="interactive"
+      ref={ref} index={0} snapPoints={['85%']}
+      enablePanDownToClose keyboardBehavior="interactive"
       backdropComponent={renderBackdrop}
       onChange={(idx) => { if (idx === -1) onClose(); }}
-      backgroundStyle={{ backgroundColor: 'white', borderRadius: 40 }}
+      backgroundStyle={{ backgroundColor: 'white', borderRadius: 28 }}
+      handleIndicatorStyle={{ backgroundColor: '#e2e8f0', width: 36 }}
     >
-      <BottomSheetView style={{ flex: 1, padding: 32 }}>
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: NAVY, marginBottom: 8 }}>Edit Department</Text>
-        <Text style={{ color: '#64748b', marginBottom: 24 }}>Update details and photo.</Text>
+      <BottomSheetView style={{ flex: 1, paddingHorizontal: 28, paddingTop: 8, paddingBottom: 36 }}>
+        <SheetHeader title="Edit department" subtitle="Update name, photo, and description." />
 
-        <View style={{ alignItems: 'center', marginBottom: 24 }}>
+        {/* Photo picker */}
+        <View style={{ alignItems: 'center', marginBottom: 28 }}>
           <View style={{ position: 'relative' }}>
-            <View style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' }}>
-              {imageUrl ? <Image source={{ uri: imageUrl }} style={{ width: 80, height: 80, borderRadius: 40 }} /> : <IconUsersGroup size={32} color="#94a3b8" />}
+            <View style={{
+              width: 72, height: 72, borderRadius: 36,
+              backgroundColor: '#f1f5f9',
+              alignItems: 'center', justifyContent: 'center',
+              borderWidth: 2, borderColor: BORDER,
+            }}>
+              {imageUrl
+                ? <Image source={{ uri: imageUrl }} style={{ width: 68, height: 68, borderRadius: 34 }} />
+                : <IconUsersGroup size={26} color="#94a3b8" />}
             </View>
-            <View style={{ position: 'absolute', bottom: -5, right: -5, flexDirection: 'row', gap: 4 }}>
-              <TouchableOpacity onPress={onPickImage} style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: NAVY, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' }}>
-                <IconCamera size={14} color="#fff" />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              onPress={onPickImage}
+              style={{
+                position: 'absolute', bottom: -2, right: -2,
+                width: 26, height: 26, borderRadius: 13,
+                backgroundColor: NAVY, alignItems: 'center', justifyContent: 'center',
+                borderWidth: 2, borderColor: 'white',
+              }}
+            >
+              <IconCamera size={12} color="#fff" />
+            </TouchableOpacity>
           </View>
         </View>
 
-        <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 8 }}>Department Name</Text>
-        <BottomSheetTextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="Enter name"
-          style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 16, fontSize: 16, fontWeight: 'bold', color: NAVY, borderWidth: 1, borderColor: '#f1f5f9', marginBottom: 16 }}
+        <SheetLabel>Name</SheetLabel>
+        <SheetInput value={name} onChangeText={setName} placeholder="Department name" style={{ fontWeight: '700' }} />
+
+        <SheetLabel>Description</SheetLabel>
+        <SheetInput
+          value={description} onChangeText={setDescription}
+          placeholder="Brief description (optional)"
+          multiline style={{ minHeight: 90, textAlignVertical: 'top', marginBottom: 28 }}
         />
 
-        <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 8 }}>Description</Text>
-        <BottomSheetTextInput
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Brief description"
-          multiline
-          style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 16, fontSize: 15, color: NAVY, borderWidth: 1, borderColor: '#f1f5f9', minHeight: 100, textAlignVertical: 'top', marginBottom: 32 }}
-        />
-
-        <TouchableOpacity onPress={onSave} disabled={loading || !name.trim()} style={[{ py: 18, borderRadius: 16, backgroundColor: NAVY, alignItems: 'center' }, (loading || !name.trim()) && { opacity: 0.5 }]}>
-          {loading ? <ActivityIndicator color="white" /> : <Text style={{ color: 'white', fontWeight: 'bold' }}>Save Changes</Text>}
-        </TouchableOpacity>
+        <PrimaryButton onPress={onSave} disabled={!name.trim()} loading={loading} label="Save changes" />
       </BottomSheetView>
     </BottomSheetModal>
   );
@@ -250,32 +325,23 @@ const GroupMemberModal = ({ visible, onClose, email, setEmail, onAdd, loading })
   useEffect(() => { if (visible) ref.current?.present(); else ref.current?.dismiss(); }, [visible]);
   return (
     <BottomSheetModal
-      ref={ref}
-      index={0}
-      snapPoints={['100%']}
-      enablePanDownToClose
-      keyboardBehavior="interactive"
+      ref={ref} index={0} snapPoints={['50%']}
+      enablePanDownToClose keyboardBehavior="interactive"
       backdropComponent={renderBackdrop}
       onChange={(idx) => { if (idx === -1) onClose(); }}
-      backgroundStyle={{ backgroundColor: 'white', borderRadius: 40 }}
+      backgroundStyle={{ backgroundColor: 'white', borderRadius: 28 }}
+      handleIndicatorStyle={{ backgroundColor: '#e2e8f0', width: 36 }}
     >
-      <BottomSheetView style={{ flex: 1, padding: 32 }}>
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: NAVY, marginBottom: 8 }}>Add Member</Text>
-        <Text style={{ color: '#64748b', marginBottom: 32 }}>Invite someone to join this department.</Text>
-
-        <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 8 }}>Email Address</Text>
-        <BottomSheetTextInput
-          value={email}
-          onChangeText={setEmail}
+      <BottomSheetView style={{ flex: 1, paddingHorizontal: 28, paddingTop: 8, paddingBottom: 36 }}>
+        <SheetHeader title="Add member" subtitle="Invite someone by their email address." />
+        <SheetLabel>Email address</SheetLabel>
+        <SheetInput
+          value={email} onChangeText={setEmail}
           placeholder="member@example.com"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 16, fontSize: 16, fontWeight: 'bold', color: NAVY, borderWidth: 1, borderColor: '#f1f5f9', marginBottom: 32 }}
+          keyboardType="email-address" autoCapitalize="none"
+          style={{ fontWeight: '600', marginBottom: 28 }}
         />
-
-        <TouchableOpacity onPress={onAdd} disabled={loading || !email.trim()} style={[{ py: 18, borderRadius: 16, backgroundColor: NAVY, alignItems: 'center' }, (loading || !email.trim()) && { opacity: 0.5 }]}>
-          {loading ? <ActivityIndicator color="white" /> : <Text style={{ color: 'white', fontWeight: 'bold' }}>Add to Department</Text>}
-        </TouchableOpacity>
+        <PrimaryButton onPress={onAdd} disabled={!email.trim()} loading={loading} label="Add to department" />
       </BottomSheetView>
     </BottomSheetModal>
   );
@@ -284,44 +350,60 @@ const GroupMemberModal = ({ visible, onClose, email, setEmail, onAdd, loading })
 const MemberCalendarModal = ({ visible, member, onClose, events, loading }) => {
   const ref = useRef(null);
   useEffect(() => { if (visible) ref.current?.present(); else ref.current?.dismiss(); }, [visible]);
-  
+
   const fmt = (date: string, type: 'time' | 'date') => {
     const d = new Date(date);
     return type === 'time'
-      ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
       : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   return (
     <BottomSheetModal
-      ref={ref}
-      index={0}
-      snapPoints={['100%']}
-      enablePanDownToClose
-      backdropComponent={renderBackdrop}
+      ref={ref} index={0} snapPoints={['70%']}
+      enablePanDownToClose backdropComponent={renderBackdrop}
       onChange={(idx) => { if (idx === -1) onClose(); }}
-      backgroundStyle={{ backgroundColor: 'white', borderRadius: 40 }}
+      backgroundStyle={{ backgroundColor: 'white', borderRadius: 28 }}
+      handleIndicatorStyle={{ backgroundColor: '#e2e8f0', width: 36 }}
     >
-      <BottomSheetView style={{ flex: 1, padding: 32 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24, gap: 12 }}>
-          {member && <AvatarInitials email={member.email} size={50} />}
-          <View>
-            <Text style={{ color: NAVY, fontSize: 18, fontWeight: 'bold' }}>{member?.email?.split('@')[0]}</Text>
-            <Text style={{ color: '#94a3b8', fontSize: 13 }}>Member Schedule</Text>
+      <BottomSheetView style={{ flex: 1, paddingHorizontal: 24, paddingTop: 8 }}>
+        {/* Member header */}
+        {member && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+            <AvatarInitials email={member.email} size={46} />
+            <View>
+              <Text style={{ color: NAVY, fontSize: 15, fontWeight: '800' }}>{member?.email?.split('@')[0]}</Text>
+              <Text style={{ color: MUTED, fontSize: 12, marginTop: 1 }}>Today's schedule</Text>
+            </View>
           </View>
-        </View>
+        )}
 
-        {loading ? <ActivityIndicator color={NAVY} size="large" /> : events.length === 0 ? (
+        {loading ? (
           <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-            <IconCalendar size={48} color="#cbd5e1" />
-            <Text style={{ color: '#94a3b8', marginTop: 16, fontWeight: 'bold' }}>No events today</Text>
+            <ActivityIndicator color={NAVY} size="small" />
+          </View>
+        ) : events.length === 0 ? (
+          <View style={{ alignItems: 'center', paddingVertical: 48 }}>
+            <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: SURFACE, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+              <IconCalendar size={22} color="#cbd5e1" />
+            </View>
+            <Text style={{ color: MUTED, fontWeight: '600', fontSize: 14 }}>No events today</Text>
           </View>
         ) : (
           <BottomSheetScrollView showsVerticalScrollIndicator={false}>
             {events.map((ev, i) => (
-              <View key={i} style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 16, marginBottom: 12, borderLeftWidth: 4, borderLeftColor: NAVY }}>
-                <Text style={{ fontWeight: 'bold', color: NAVY, fontSize: 15 }}>{ev.title}</Text>
-                <Text style={{ color: '#64748b', fontSize: 12, marginTop: 4 }}>{fmt(ev.startAt, 'time')} – {fmt(ev.endAt, 'time')}</Text>
+              <View key={i} style={{
+                backgroundColor: SURFACE,
+                padding: 14, borderRadius: 14, marginBottom: 10,
+                flexDirection: 'row', alignItems: 'center', gap: 12,
+              }}>
+                <View style={{ width: 3, height: '100%', backgroundColor: NAVY, borderRadius: 2, alignSelf: 'stretch' }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '700', color: NAVY, fontSize: 14 }}>{ev.title}</Text>
+                  <Text style={{ color: MUTED, fontSize: 12, marginTop: 3 }}>
+                    {fmt(ev.startAt, 'time')} – {fmt(ev.endAt, 'time')}
+                  </Text>
+                </View>
               </View>
             ))}
           </BottomSheetScrollView>
@@ -346,14 +428,14 @@ export default function GroupDetailPage() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
   const [showAddEventModal, setShowAddEventModal] = useState(false);
-  
+
   const [editGroupName, setEditGroupName] = useState('');
   const [editGroupDescription, setEditGroupDescription] = useState('');
   const [editGroupImageUrl, setEditGroupImageUrl] = useState(null);
 
   const groupQuery = trpc.group.getGroup.useQuery({ id: groupId }, { enabled: !!groupId });
   const currentUserQuery = trpc.profile.me.useQuery();
-  
+
   const isLoading = groupQuery.isLoading || currentUserQuery.isLoading;
   const isError = groupQuery.isError;
   const group = groupQuery.data;
@@ -364,6 +446,24 @@ export default function GroupDetailPage() {
     { memberId: selectedMember?.user?.id || selectedMember?.userId || '', groupId },
     { enabled: !!selectedMember && !!groupId }
   );
+
+  // Stable 'now' for the query to avoid infinite loops
+  const availabilityParams = useMemo(() => {
+    const d = new Date();
+    d.setSeconds(0, 0);
+    d.setMilliseconds(0);
+    const iso = d.toISOString();
+    return { groupId, startDate: iso, endDate: iso };
+  }, [groupId, Math.floor(Date.now() / 60000)]); // Only changes once per minute
+
+  const teamAvailabilityQuery = trpc.calendar.getTeamAvailability.useQuery(
+    availabilityParams,
+    { 
+      enabled: !!groupId,
+      refetchInterval: 30000 // Poll every 30 seconds
+    }
+  );
+  const teamAvailability = teamAvailabilityQuery.data ?? [];
 
   const addGroupMember = trpc.group.addGroupMember.useMutation({
     onSuccess: () => { setShowAddModal(false); setMemberEmail(''); utils.group.getGroup.invalidate(); }
@@ -381,78 +481,262 @@ export default function GroupDetailPage() {
     onSuccess: () => { setShowEditGroupModal(false); utils.group.getGroup.invalidate(); }
   });
 
-  if (isLoading) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f6f5f3' }}><ActivityIndicator size="large" color={NAVY} /><Text style={{ marginTop: 12, color: '#94a3b8', fontWeight: '500' }}>Loading department...</Text></View>;
+  const insets = useSafeAreaInsets();
 
+  // ── Loading ──
+  if (isLoading) return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: SURFACE }}>
+      <ActivityIndicator size="small" color={NAVY} />
+      <Text style={{ marginTop: 10, color: MUTED, fontSize: 13 }}>Loading…</Text>
+    </View>
+  );
+
+  // ── Error ──
   if (isError || !group) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#f6f5f3', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-        <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-          <AlertCircle color="#ef4444" size={28} />
+      <View style={{ flex: 1, backgroundColor: SURFACE, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+        <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+          <AlertCircle color="#ef4444" size={24} />
         </View>
-        <Text style={{ color: NAVY, fontSize: 18, fontWeight: '800', textAlign: 'center' }}>Department not found</Text>
-        <Text style={{ color: '#9ca3af', fontSize: 13, textAlign: 'center', marginTop: 8, lineHeight: 20 }}>This department may have been deleted or you don't have access.</Text>
+        <Text style={{ color: NAVY, fontSize: 16, fontWeight: '800', textAlign: 'center' }}>Department not found</Text>
+        <Text style={{ color: MUTED, fontSize: 13, textAlign: 'center', marginTop: 6, lineHeight: 20 }}>
+          It may have been deleted or you don't have access.
+        </Text>
         <TouchableOpacity
           onPress={() => router.back()}
-          style={{ marginTop: 24, paddingVertical: 14, paddingHorizontal: 32, backgroundColor: NAVY, borderRadius: 16 }}
+          style={{ marginTop: 20, paddingVertical: 12, paddingHorizontal: 28, backgroundColor: NAVY, borderRadius: 14 }}
         >
-          <Text style={{ color: '#fff', fontWeight: 'bold' }}>Go Back</Text>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Go back</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f6f5f3' }}>
+    <View style={{ flex: 1, backgroundColor: SURFACE }}>
       <StatusBar barStyle="dark-content" />
-      
-      <GroupMemberModal visible={showAddModal} onClose={() => setShowAddModal(false)} email={memberEmail} setEmail={setMemberEmail} onAdd={() => addGroupMember.mutate({ groupId, email: memberEmail })} loading={addGroupMember.isPending} />
-      <ConfirmRemoveModal visible={!!memberToRemove} member={memberToRemove} onClose={() => setMemberToRemove(null)} onConfirm={() => removeGroupMember.mutate({ groupId, memberId: memberToRemove.id })} loading={removeGroupMember.isPending} />
-      <ConfirmLeaveModal visible={showLeaveConfirm} groupName={group?.name} onClose={() => setShowLeaveConfirm(false)} onConfirm={() => leaveGroup.mutate({ groupId })} loading={leaveGroup.isPending} />
-      <EditGroupModal visible={showEditGroupModal} onClose={() => setShowEditGroupModal(false)} name={editGroupName} setName={setEditGroupName} description={editGroupDescription} setDescription={setEditGroupDescription} imageUrl={editGroupImageUrl} onSave={() => updateGroup.mutate({ id: groupId, name: editGroupName, description: editGroupDescription, imageUrl: editGroupImageUrl })} loading={updateGroup.isPending} />
-      <MemberCalendarModal visible={!!selectedMember} member={selectedMember} onClose={() => setSelectedMember(null)} events={getTeamMemberCalendar.data || []} loading={getTeamMemberCalendar.isLoading} />
-      <AddEventModal visible={showAddEventModal} onClose={() => setShowAddEventModal(false)} initialGroupId={groupId} />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 60 }}>
-        <View style={{ backgroundColor: '#fff', paddingTop: 64, paddingBottom: 32, paddingHorizontal: 24, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
-           <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingHorizontal: 24, marginBottom: 24 }}>
-              <TouchableOpacity onPress={() => router.back()} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center' }}>
-                <IconBack size={20} />
+      {/* ── Sheets ── */}
+      <GroupMemberModal
+        visible={showAddModal} onClose={() => setShowAddModal(false)}
+        email={memberEmail} setEmail={setMemberEmail}
+        onAdd={() => addGroupMember.mutate({ groupId, email: memberEmail })}
+        loading={addGroupMember.isPending}
+      />
+      <ConfirmRemoveModal
+        visible={!!memberToRemove} member={memberToRemove}
+        onClose={() => setMemberToRemove(null)}
+        onConfirm={() => removeGroupMember.mutate({ groupId, memberId: memberToRemove.id })}
+        loading={removeGroupMember.isPending}
+      />
+      <ConfirmLeaveModal
+        visible={showLeaveConfirm} groupName={group?.name}
+        onClose={() => setShowLeaveConfirm(false)}
+        onConfirm={() => leaveGroup.mutate({ groupId })}
+        loading={leaveGroup.isPending}
+      />
+      <EditGroupModal
+        visible={showEditGroupModal} onClose={() => setShowEditGroupModal(false)}
+        name={editGroupName} setName={setEditGroupName}
+        description={editGroupDescription} setDescription={setEditGroupDescription}
+        imageUrl={editGroupImageUrl}
+        onSave={() => updateGroup.mutate({ id: groupId, name: editGroupName, description: editGroupDescription, imageUrl: editGroupImageUrl })}
+        loading={updateGroup.isPending}
+      />
+      <MemberCalendarModal
+        visible={!!selectedMember} member={selectedMember}
+        onClose={() => setSelectedMember(null)}
+        events={getTeamMemberCalendar.data || []}
+        loading={getTeamMemberCalendar.isLoading}
+      />
+      <AddEventModal
+        visible={showAddEventModal} onClose={() => setShowAddEventModal(false)}
+        initialGroupId={groupId}
+      />
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 48 }}>
+
+        {/* ── Compact header ── */}
+        <View style={{ backgroundColor: '#fff', paddingTop: insets.top + 8, paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: BORDER }}>
+
+          {/* Top nav row */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: SURFACE, alignItems: 'center', justifyContent: 'center' }}
+              activeOpacity={0.7}
+            >
+              <IconBack size={18} />
+            </TouchableOpacity>
+
+            {/* Right actions */}
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              {isAdmin && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setEditGroupName(group.name);
+                    setEditGroupDescription(group.description || '');
+                    setEditGroupImageUrl(group.imageUrl);
+                    setShowEditGroupModal(true);
+                  }}
+                  style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: SURFACE, alignItems: 'center', justifyContent: 'center' }}
+                  activeOpacity={0.7}
+                >
+                  <IconEdit size={16} color="#6b7280" />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                onPress={() => setShowLeaveConfirm(true)}
+                style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#fef2f2', alignItems: 'center', justifyContent: 'center' }}
+                activeOpacity={0.7}
+              >
+                <IconLogOut size={16} color="#ef4444" />
               </TouchableOpacity>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                {isAdmin && <TouchableOpacity onPress={() => { setEditGroupName(group.name); setEditGroupDescription(group.description || ''); setEditGroupImageUrl(group.imageUrl); setShowEditGroupModal(true); }} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center' }}><IconEdit size={18} /></TouchableOpacity>}
-                <TouchableOpacity onPress={() => setShowLeaveConfirm(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center' }}><IconLogOut size={18} color="#ef4444" /></TouchableOpacity>
-              </View>
-           </View>
-           
-           <View style={{ width: 90, height: 90, borderRadius: 45, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff', marginBottom: 16 }}>
-             {group.imageUrl ? <Image source={{ uri: group.imageUrl }} style={{ width: 84, height: 84, borderRadius: 42 }} /> : <IconUsersGroup size={40} />}
-           </View>
-           
-           <Text style={{ fontSize: 26, fontWeight: '900', color: NAVY }}>{group.name}</Text>
-           <Text style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: 13, marginTop: 4 }}>DEPARTMENT · {group.members.length} MEMBERS</Text>
+            </View>
+          </View>
+
+          {/* Group identity row — horizontal, compact */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <View style={{
+              width: 56, height: 56, borderRadius: 18,
+              backgroundColor: '#dcfce7',
+              alignItems: 'center', justifyContent: 'center',
+              borderWidth: 1, borderColor: BORDER,
+            }}>
+              {group.imageUrl
+                ? <Image source={{ uri: group.imageUrl }} style={{ width: 52, height: 52, borderRadius: 16 }} />
+                : <IconUsersGroup size={26} color="#16a34a" />}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 20, fontWeight: '900', color: NAVY, letterSpacing: -0.4 }}>{group.name}</Text>
+              <Text style={{ color: MUTED, fontSize: 12, fontWeight: '600', marginTop: 2, letterSpacing: 0.5 }}>
+                DEPARTMENT · {group.members.length} {group.members.length === 1 ? 'MEMBER' : 'MEMBERS'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Description (if present) */}
+          {!!group.description && (
+            <Text style={{ color: '#64748b', fontSize: 13, lineHeight: 20, marginTop: 12 }}>
+              {group.description}
+            </Text>
+          )}
         </View>
 
-        <View style={{ padding: 24 }}>
-           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-             <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1.5 }}>Members</Text>
-             <View style={{ flexDirection: 'row', gap: 8 }}>
-               <TouchableOpacity onPress={() => setShowAddEventModal(true)} style={{ backgroundColor: NAVY, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 12 }}><Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>Schedule</Text></TouchableOpacity>
-               {isAdmin && <TouchableOpacity onPress={() => setShowAddModal(true)} style={{ backgroundColor: 'white', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0' }}><Text style={{ color: NAVY, fontWeight: 'bold', fontSize: 12 }}>Add</Text></TouchableOpacity>}
-             </View>
-           </View>
+        {/* ── Members section ── */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 24 }}>
 
-           <View style={{ backgroundColor: 'white', borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: '#f1f5f9' }}>
-             {group.members.map((m, i) => (
-               <TouchableOpacity key={m.id} onPress={() => setSelectedMember(m)} style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: i === group.members.length - 1 ? 0 : 1, borderBottomColor: '#f8fafc' }}>
-                 <AvatarInitials email={m.email} size={44} />
-                 <View style={{ flex: 1, marginLeft: 16 }}>
-                   <Text style={{ fontWeight: 'bold', color: NAVY }}>{m.email}</Text>
-                   <Text style={{ color: '#94a3b8', fontSize: 12, marginTop: 2 }}>{m.userId === group.userId ? 'Admin' : 'Member'}</Text>
-                 </View>
-                 {isAdmin && m.id !== group.userId && <TouchableOpacity onPress={(e) => { e.stopPropagation(); setMemberToRemove(m); }}><IconRemoveUser size={18} color="#ef4444" /></TouchableOpacity>}
-               </TouchableOpacity>
-             ))}
-           </View>
+          {/* Section header */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: MUTED, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+              Members
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {/* Schedule button — always visible */}
+              <TouchableOpacity
+                onPress={() => router.push(`/group/${groupId}/availability`)}
+                style={{ backgroundColor: '#06b6d4', paddingVertical: 7, paddingHorizontal: 14, borderRadius: 10, marginRight: 4 }}
+                activeOpacity={0.85}
+              >
+                <Text style={{ color: 'white', fontWeight: '700', fontSize: 12 }}>Calander View</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setShowAddEventModal(true)}
+                style={{ backgroundColor: NAVY, paddingVertical: 7, paddingHorizontal: 14, borderRadius: 10 }}
+                activeOpacity={0.85}
+              >
+                <Text style={{ color: 'white', fontWeight: '700', fontSize: 12 }}>Schedule</Text>
+              </TouchableOpacity>
+
+              {/* Add button — admin only */}
+              {isAdmin && (
+                <TouchableOpacity
+                  onPress={() => setShowAddModal(true)}
+                  style={{ backgroundColor: 'white', paddingVertical: 7, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: BORDER, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  activeOpacity={0.7}
+                >
+                  <IconPlus color={NAVY} size={12} />
+                  <Text style={{ color: NAVY, fontWeight: '700', fontSize: 12 }}>Add</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* Member list */}
+          <View style={{ backgroundColor: 'white', borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: BORDER }}>
+            {group.members.map((m, i) => {
+              const isLastItem = i === group.members.length - 1;
+              const isMemberCreator = m.userId === group.userId;
+              // Admin can remove others, but cannot remove the group creator (or themselves)
+              const canRemove = isAdmin && !isMemberCreator && m.userId !== currentUser?.id;
+
+              return (
+                <TouchableOpacity
+                  key={m.id}
+                  onPress={() => setSelectedMember(m)}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center',
+                    paddingVertical: 14, paddingHorizontal: 16,
+                    borderBottomWidth: isLastItem ? 0 : 1,
+                    borderBottomColor: BORDER,
+                  }}
+                  activeOpacity={0.6}
+                >
+                  <View style={{ position: 'relative' }}>
+                    <AvatarInitials email={m.email} size={40} />
+                    {teamAvailability.find(s => s.userId === m.userId)?.isBusy && (
+                      <View 
+                        style={{ 
+                          position: 'absolute', bottom: -1, right: -1, 
+                          width: 13, height: 13, borderRadius: 7, 
+                          backgroundColor: '#ef4444', 
+                          borderWidth: 2, borderColor: 'white' 
+                        }} 
+                      />
+                    )}
+                  </View>
+
+                  <View style={{ flex: 1, marginLeft: 13 }}>
+                    <Text style={{ fontWeight: '700', color: NAVY, fontSize: 14 }} numberOfLines={1}>
+                      {m.email}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                      {isMemberCreator && (
+                        <View style={{ backgroundColor: '#f0fdf4', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#16a34a', letterSpacing: 0.4 }}>ADMIN</Text>
+                        </View>
+                      )}
+                      {!isMemberCreator && (
+                        <Text style={{ fontSize: 12, color: MUTED }}>Member</Text>
+                      )}
+                      {teamAvailability.find(s => s.userId === m.userId)?.isBusy && (
+                        <View style={{ backgroundColor: '#fef2f2', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#ef4444', letterSpacing: 0.4 }}>BUSY</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Calendar peek indicator */}
+                  <View style={{ marginRight: canRemove ? 12 : 0 }}>
+                    <IconCalendar size={16} color="#cbd5e1" />
+                  </View>
+
+                  {/* Remove — admin-only, not on self or group creator */}
+                  {canRemove && (
+                    <TouchableOpacity
+                      onPress={(e) => { e.stopPropagation(); setMemberToRemove(m); }}
+                      style={{ padding: 6, marginLeft: 4 }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <IconRemoveUser size={16} color="#ef4444" />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
       </ScrollView>
     </View>

@@ -9,29 +9,50 @@ export async function cancelAllNotifications() {
   await Notifications.cancelAllScheduledNotificationsAsync();
 }
 
+function formatTime(date: Date) {
+  const h = date.getHours();
+  const m = date.getMinutes();
+  const displayH = h % 12 || 12;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  return `${displayH}:${m.toString().padStart(2, '0')} ${ampm}`;
+}
+
 export async function scheduleEventReminder(
   title: string,
   eventDate: Date,
   minutesBefore: number,
   eventId: string
 ) {
-  const trigger = new Date(eventDate.getTime() - minutesBefore * 60000);
+  let triggerDate = new Date(eventDate.getTime() - minutesBefore * 60000);
+  const now = new Date();
   
-  if (trigger < new Date()) {
-    return null; // Don't schedule if fire time is in the past
+  if (eventDate < now) {
+    return null; // Don't schedule for past events
   }
 
+  let isImmediate = false;
+  if (triggerDate < now) {
+    // If the reminder time has already passed, fire it in 2 seconds
+    triggerDate = new Date(now.getTime() + 2000);
+    isImmediate = true;
+  }
+
+  const timeStr = formatTime(eventDate);
   const notificationId = await Notifications.scheduleNotificationAsync({
     content: {
       title: "Reminder: " + title,
-      body: minutesBefore === 0 ? "Starting now!" : `Starting in ${minutesBefore} minutes`,
+      body: isImmediate
+        ? `Reminder for ${timeStr} (Starts in ${Math.round((eventDate.getTime() - now.getTime()) / 60000)} mins)`
+        : minutesBefore === 0 
+          ? `Starting now (${timeStr})` 
+          : `Starts at ${timeStr} (in ${minutesBefore} mins)`,
       data: { eventId },
       sound: true,
       priority: Notifications.AndroidNotificationPriority.MAX,
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date: trigger,
+      date: triggerDate,
     },
   });
 
