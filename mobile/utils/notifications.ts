@@ -59,6 +59,47 @@ export async function scheduleEventReminder(
   return notificationId;
 }
 
+export async function scheduleTaskReminder(
+  title: string,
+  taskDate: Date,
+  minutesBefore: number,
+  taskId: string
+) {
+  let triggerDate = new Date(taskDate.getTime() - minutesBefore * 60000);
+  const now = new Date();
+  
+  if (taskDate < now) {
+    return null; // Don't schedule for past tasks
+  }
+
+  let isImmediate = false;
+  if (triggerDate < now) {
+    triggerDate = new Date(now.getTime() + 2000);
+    isImmediate = true;
+  }
+
+  const timeStr = formatTime(taskDate);
+  const notificationId = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: "Task Reminder: " + title,
+      body: isImmediate
+        ? `Task due/starts at ${timeStr}`
+        : minutesBefore === 0 
+          ? `Task due/starts now (${timeStr})` 
+          : `Task due/starts at ${timeStr} (in ${minutesBefore} mins)`,
+      data: { taskId },
+      sound: true,
+      priority: Notifications.AndroidNotificationPriority.MAX,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date: triggerDate,
+    },
+  });
+
+  return notificationId;
+}
+
 export async function registerForPushNotificationsAsync() {
   let token;
 

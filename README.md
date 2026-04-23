@@ -2,7 +2,7 @@
 
 An Intelligent Digital Assistant Monorepo designed to manage your schedule, synchronize team availability, handle tasks, and provide real-time updates and reminders.
 
-## 🌟 What It Does
+##  What It Does
 
 Personal Secretary is a cross-platform application that acts as your virtual assistant. It allows you to:
 - **Manage Events & Tasks:** Schedule meetings, tasks, and personal events with customizable reminders (defaults to 5 minutes prior).
@@ -11,7 +11,7 @@ Personal Secretary is a cross-platform application that acts as your virtual ass
 - **Smart Reminders:** Reliable push notifications and local reminders powered by a robust background job queue.
 - **Centralized Dashboard:** See your day at a glance, accept department invites, and monitor your to-do lists seamlessly.
 
-## 🏗️ Architecture & How It Works
+##  Architecture & How It Works
 
 This project is structured as a **Monorepo** using [Turborepo](https://turbo.build/). Turborepo provides smart build orchestration, caching, and fast local development by running the backend, mobile app, and shared packages consistently from one root directory.
 
@@ -33,7 +33,7 @@ This project is structured as a **Monorepo** using [Turborepo](https://turbo.bui
    - **Stack:** Expo (React Native), Expo Router, NativeWind (Tailwind CSS for native), tRPC Client, React Query.
    - **How it works:** A high-performance native application. It directly references the tRPC server types so that developers get autocomplete and type-checking when fetching data. It listens to socket signals to trigger dynamic UI updates (like graceful navigation on group changes) and schedules local push notifications using Expo Notifications.
 
-## 📦 Key Libraries & Packages
+##  Key Libraries & Packages
 
 - **tRPC:** Enables seamless, type-safe API communication between the Node server and the Expo app—no manual typing of API endpoint URLs or responses needed.
 - **Prisma:** A modern ORM used to manage PostgreSQL easily, guaranteeing a robust TypeScript integration.
@@ -41,7 +41,7 @@ This project is structured as a **Monorepo** using [Turborepo](https://turbo.bui
 - **BullMQ & ioredis:** Handles background queues running on Redis (like "send digest email" or "fire schedule reminder") ensuring high performance without blocking the main Express thread.
 - **Socket.io:** Powers real-time connectivity to refresh mobile calendars the second an event is mutated on the server.
 
-## 🚀 Getting Started & Commands
+##  Getting Started & Commands
 
 To get this project running on your local machine, ensure you have **Node.js**, **PostgreSQL**, and an **Expo** environment set up.
 

@@ -1,6 +1,6 @@
-import { z } from 'zod';
 import { router, protectedProcedure } from '../trpcBase';
 import { GoogleCalendarService } from '../services/google-calendar.service';
+import { googleCallbackSchema } from '../schemas';
 
 export const googleSyncRouter = router({
   /**
@@ -28,7 +28,7 @@ export const googleSyncRouter = router({
    * but for simplified testing we can call it from a script)
    */
   handleCallback: protectedProcedure
-    .input(z.object({ code: z.string() }))
+    .input(googleCallbackSchema)
     .mutation(async ({ ctx, input }) => {
       await GoogleCalendarService.handleCallback(ctx.user.id, input.code);
       return { success: true };

@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Platform,
 } from 'react-native';
 import {
   BottomSheetModal,
@@ -19,22 +18,18 @@ import {
 } from '@gorhom/bottom-sheet';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import {
   FileText,
   Search,
   Plus,
-  CheckCircle2,
   X,
-  Trash2,
   Filter,
   AlertCircle,
   Pin,
   Archive,
-  Edit3,
-  Clock,
   Check,
 } from 'lucide-react-native';
-import Markdown from 'react-native-markdown-display';
 import { trpc } from '../../utils/trpc';
 
 const NAVY = '#111827';
@@ -92,16 +87,6 @@ const PrimaryBtn = ({ onPress, disabled, loading, label }: any) => (
   </TouchableOpacity>
 );
 
-const GhostBtn = ({ onPress, label, style }: any) => (
-  <TouchableOpacity
-    onPress={onPress}
-    activeOpacity={0.7}
-    style={[{ backgroundColor: SURFACE, borderRadius: 12, paddingVertical: 14, alignItems: 'center', flex: 1 }, style]}
-  >
-    <Text style={{ color: '#64748b', fontWeight: '600', fontSize: 15 }}>{label}</Text>
-  </TouchableOpacity>
-);
-
 // ── Note card ──
 function NoteItem({ note, onPress }: { note: any; onPress: () => void }) {
   const dateStr = new Date(note.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -142,25 +127,19 @@ function NoteItem({ note, onPress }: { note: any; onPress: () => void }) {
 // ── Main screen ──
 export default function NotesScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [search, setSearch] = useState('');
   const [isAddModalVisible, setAddModalVisible] = useState(false);
-  const [isDetailModalVisible, setDetailModalVisible] = useState(false);
   const [isSortModalVisible, setSortModalVisible] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [selectedNote, setSelectedNote] = useState<any>(null);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [sortOrder, setSortOrder] = useState('Newest');
-  const [isEditingMode, setIsEditingMode] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
 
   const addModalRef = useRef<BottomSheetModal>(null);
-  const detailModalRef = useRef<BottomSheetModal>(null);
   const filterModalRef = useRef<BottomSheetModal>(null);
 
   useEffect(() => { if (isAddModalVisible) addModalRef.current?.present(); else addModalRef.current?.dismiss(); }, [isAddModalVisible]);
-  useEffect(() => { if (isDetailModalVisible) detailModalRef.current?.present(); else detailModalRef.current?.dismiss(); }, [isDetailModalVisible]);
   useEffect(() => { if (isSortModalVisible) filterModalRef.current?.present(); else filterModalRef.current?.dismiss(); }, [isSortModalVisible]);
 
   const { data: notes, isLoading, refetch, isRefetching, isError } = trpc.note.getNotes.useQuery();
@@ -189,48 +168,21 @@ export default function NotesScreen() {
   }, [notes, search, sortOrder, showArchived]);
 
   const createNoteMutation = trpc.note.createNote.useMutation({
-    onSuccess: () => {
-      refetch(); setAddModalVisible(false); setNewTitle(''); setNewDesc('');
+    onSuccess: (newNote) => {
+      refetch();
+      setAddModalVisible(false);
+      setNewTitle('');
+      setNewDesc('');
+      // Navigate to the newly created note's full-screen editor
+      if (newNote?.id) {
+        router.push(`/notes/${newNote.id}`);
+      }
     },
   });
-
-  const updateNoteMutation = trpc.note.updateNote.useMutation({
-    onSuccess: () => { refetch(); setSaveStatus('saved'); setTimeout(() => setSaveStatus('idle'), 2000); },
-  });
-
-  const deleteNoteMutation = trpc.note.deleteNote.useMutation({
-    onSuccess: () => { refetch(); setDetailModalVisible(false); setShowDeleteConfirm(false); },
-  });
-
-  // Auto-save on content change
-  useEffect(() => {
-    if (!selectedNote || !isDetailModalVisible) return;
-    const t = setTimeout(() => {
-      if (selectedNote.title?.trim() || selectedNote.plainText?.trim()) {
-        setSaveStatus('saving');
-        updateNoteMutation.mutate({ id: selectedNote.id, title: selectedNote.title, plainText: selectedNote.plainText });
-      }
-    }, 1500);
-    return () => clearTimeout(t);
-  }, [selectedNote?.title, selectedNote?.plainText]);
 
   const handleCreateNote = () => {
     if (!newDesc.trim() && !newTitle.trim()) return;
     createNoteMutation.mutate({ title: newTitle.trim() || 'Untitled log', plainText: newDesc.trim() || undefined });
-  };
-
-  const handleTogglePin = () => {
-    if (!selectedNote) return;
-    const upd = { ...selectedNote, isPinned: !selectedNote.isPinned };
-    setSelectedNote(upd);
-    updateNoteMutation.mutate({ id: upd.id, isPinned: upd.isPinned });
-  };
-
-  const handleToggleArchive = () => {
-    if (!selectedNote) return;
-    const upd = { ...selectedNote, isArchived: !selectedNote.isArchived };
-    setSelectedNote(upd);
-    updateNoteMutation.mutate({ id: upd.id, isArchived: upd.isArchived });
   };
 
   const todayText = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase();
@@ -369,10 +321,7 @@ export default function NotesScreen() {
               key={note.id}
               note={note}
               onPress={() => {
-                setSelectedNote(note);
-                setShowDeleteConfirm(false);
-                setIsEditingMode(false);
-                setDetailModalVisible(true);
+                router.push(`/notes/${note.id}`);
               }}
             />
           ))
@@ -428,160 +377,6 @@ export default function NotesScreen() {
             label="Save log"
           />
         </BottomSheetScrollView>
-      </BottomSheetModal>
-
-      {/* ══════════════════════════════════════
-          DETAIL / EDIT SHEET
-      ══════════════════════════════════════ */}
-      <BottomSheetModal
-        ref={detailModalRef}
-        snapPoints={['90%']}
-        enablePanDownToClose
-        keyboardBehavior="interactive"
-        backdropComponent={renderBackdrop}
-        handleIndicatorStyle={{ backgroundColor: '#e2e8f0', width: 36 }}
-        backgroundStyle={{ backgroundColor: 'white', borderRadius: 24 }}
-        onChange={(i) => { if (i === -1) { setDetailModalVisible(false); setShowDeleteConfirm(false); } }}
-      >
-        {showDeleteConfirm && selectedNote ? (
-          <BottomSheetView style={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 32, alignItems: 'center' }}>
-            <View style={{ width: 48, height: 48, borderRadius: 15, backgroundColor: '#fef2f2', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
-              <Trash2 size={20} color="#ef4444" />
-            </View>
-            <Text style={{ fontSize: 17, fontWeight: '800', color: NAVY, marginBottom: 6 }}>Delete log?</Text>
-            <Text style={{ color: MUTED, textAlign: 'center', fontSize: 13, lineHeight: 20, marginBottom: 28 }}>
-              "<Text style={{ color: NAVY, fontWeight: '600' }}>{selectedNote.title || 'Untitled log'}</Text>" will be permanently removed.
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
-              <GhostBtn onPress={() => setShowDeleteConfirm(false)} label="Cancel" />
-              <TouchableOpacity
-                onPress={() => deleteNoteMutation.mutate({ id: selectedNote.id })}
-                style={{ flex: 1, backgroundColor: '#ef4444', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
-                activeOpacity={0.85}
-              >
-                {deleteNoteMutation.isPending
-                  ? <ActivityIndicator color="white" size="small" />
-                  : <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>Delete</Text>}
-              </TouchableOpacity>
-            </View>
-          </BottomSheetView>
-        ) : selectedNote ? (
-          <>
-            <BottomSheetView style={{ paddingHorizontal: 24, paddingTop: 6, paddingBottom: 0 }}>
-              {/* Header */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                {/* Left actions */}
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {/* Pin */}
-                  <TouchableOpacity
-                    onPress={handleTogglePin}
-                    style={{
-                      width: 34, height: 34, borderRadius: 10,
-                      backgroundColor: selectedNote.isPinned ? '#fef3c7' : SURFACE,
-                      borderWidth: 1, borderColor: selectedNote.isPinned ? '#fcd34d' : BORDER,
-                      alignItems: 'center', justifyContent: 'center',
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Pin size={14} color={selectedNote.isPinned ? '#d97706' : MUTED} />
-                  </TouchableOpacity>
-
-                  {/* Archive */}
-                  <TouchableOpacity
-                    onPress={handleToggleArchive}
-                    style={{
-                      width: 34, height: 34, borderRadius: 10,
-                      backgroundColor: selectedNote.isArchived ? '#f0fdf4' : SURFACE,
-                      borderWidth: 1, borderColor: selectedNote.isArchived ? '#86efac' : BORDER,
-                      alignItems: 'center', justifyContent: 'center',
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Archive size={14} color={selectedNote.isArchived ? '#16a34a' : MUTED} />
-                  </TouchableOpacity>
-
-                  {/* Edit / preview toggle */}
-                  <TouchableOpacity
-                    onPress={() => setIsEditingMode(!isEditingMode)}
-                    style={{
-                      height: 34, paddingHorizontal: 12, borderRadius: 10,
-                      backgroundColor: isEditingMode ? NAVY : SURFACE,
-                      borderWidth: 1, borderColor: isEditingMode ? NAVY : BORDER,
-                      alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 5,
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    {isEditingMode
-                      ? <FileText size={13} color="white" />
-                      : <Edit3 size={13} color={MUTED} />}
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: isEditingMode ? 'white' : MUTED }}>
-                      {isEditingMode ? 'Preview' : 'Edit'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Right actions */}
-                <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-                  {/* Save status */}
-                  {saveStatus === 'saving' && <ActivityIndicator size="small" color={MUTED} />}
-                  {saveStatus === 'saved' && <Check size={14} color="#22c55e" />}
-
-                  {/* Delete */}
-                  <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Trash2 size={15} color="#ef4444" />
-                  </TouchableOpacity>
-
-                  {/* Close */}
-                  <TouchableOpacity onPress={() => setDetailModalVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <X size={18} color={MUTED} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Title input */}
-              <SheetInput
-                value={selectedNote.title || ''}
-                onChangeText={(t: string) => setSelectedNote({ ...selectedNote, title: t })}
-                placeholder="Log title"
-                style={{ fontWeight: '700', fontSize: 16, marginBottom: 10 }}
-              />
-            </BottomSheetView>
-
-            {/* Content */}
-            <BottomSheetScrollView
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
-              showsVerticalScrollIndicator={false}
-            >
-              {isEditingMode ? (
-                <SheetInput
-                  multiline
-                  value={selectedNote.plainText || ''}
-                  onChangeText={(t: string) => setSelectedNote({ ...selectedNote, plainText: t })}
-                  placeholder="Write your log…"
-                  style={{ minHeight: 280, textAlignVertical: 'top', marginBottom: 0 }}
-                />
-              ) : (
-                <View style={{
-                  backgroundColor: SURFACE, padding: 14, borderRadius: 12,
-                  borderWidth: 1, borderColor: BORDER, minHeight: 200,
-                }}>
-                  <Markdown style={{ body: { color: NAVY, fontSize: 14, lineHeight: 22 } }}>
-                    {selectedNote.plainText || '*No content yet. Tap Edit to write.*'}
-                  </Markdown>
-                </View>
-              )}
-
-              {/* Timestamp */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 14 }}>
-                <Clock size={11} color={MUTED} />
-                <Text style={{ fontSize: 11, color: MUTED }}>
-                  {new Date(selectedNote.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </Text>
-              </View>
-            </BottomSheetScrollView>
-          </>
-        ) : null}
       </BottomSheetModal>
 
       {/* ══════════════════════════════════════

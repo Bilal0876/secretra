@@ -1,14 +1,17 @@
 // @ts-nocheck
-import { z } from 'zod';
 import { router, protectedProcedure } from '../trpcBase';
 import prisma from '../shared/prisma';
+import {
+  noteFilterSchema,
+  noteInputSchema,
+  noteUpdateSchema,
+  idParam,
+} from '../schemas';
 
 export const noteRouter = router({
   // Get all notes for the current user
   getNotes: protectedProcedure
-    .input(z.object({
-      search: z.string().optional(),
-    }).optional())
+    .input(noteFilterSchema)
     .query(async ({ ctx, input }) => {
       return prisma.note.findMany({
         where: {
@@ -27,16 +30,7 @@ export const noteRouter = router({
 
   // Create a new note
   createNote: protectedProcedure
-    .input(z.object({
-      title: z.string().optional(),
-      content: z.any().optional(),
-      plainText: z.string().optional(),
-      contactId: z.string().uuid().optional(),
-      tags: z.array(z.string()).optional(),
-      folder: z.string().optional(),
-      isPinned: z.boolean().optional(),
-      isArchived: z.boolean().optional()
-    }))
+    .input(noteInputSchema)
     .mutation(async ({ ctx, input }) => {
       const { title, content, plainText, contactId, tags, folder, isPinned, isArchived } = input;
       try {
@@ -63,17 +57,7 @@ export const noteRouter = router({
 
   // Update a note
   updateNote: protectedProcedure
-    .input(z.object({
-      id: z.string().uuid(),
-      title: z.string().optional(),
-      content: z.any().optional(),
-      plainText: z.string().optional(),
-      contactId: z.string().uuid().optional(),
-      tags: z.array(z.string()).optional(),
-      folder: z.string().optional(),
-      isPinned: z.boolean().optional(),
-      isArchived: z.boolean().optional()
-    }))
+    .input(noteUpdateSchema)
     .mutation(async ({ ctx, input }) => {
       const { id, title, content, plainText, contactId, tags, folder, isPinned, isArchived } = input;
       return prisma.note.update({
@@ -93,7 +77,7 @@ export const noteRouter = router({
 
   // Delete a note
   deleteNote: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(idParam)
     .mutation(async ({ ctx, input }) => {
       return prisma.note.update({
         where: { id: input.id, userId: ctx.user.id },

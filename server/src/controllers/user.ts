@@ -1,18 +1,21 @@
-import { z } from 'zod';
 import { TRPCError } from '@trpc/server'; 
 
 import { router, publicProcedure, protectedProcedure } from '../trpcBase';
 import prisma from '../shared/prisma';
 import { AuthService } from '../services/auth.service';
+import {
+  registerSchema,
+  loginSchema,
+  socialLoginSchema,
+  googleLoginSchema,
+  updateProfileSchema,
+  pushTokenSchema,
+} from '../schemas';
 
 export const userRouter = router({
   // Register a new user
   register: publicProcedure
-    .input(z.object({ 
-      email: z.string().email(), 
-      password: z.string().min(8),
-      name: z.string().optional()
-    }))
+    .input(registerSchema)
     .mutation(async ({ input }) => {
       const { email, password, name } = input;
 
@@ -45,9 +48,7 @@ export const userRouter = router({
 
   // Google OAuth login/signup
   googleLogin: publicProcedure
-    .input(z.object({
-      idToken: z.string(),
-    }))
+    .input(googleLoginSchema)
     .mutation(async ({ input }) => {
       const googleUser = await AuthService.verifyGoogleToken(input.idToken);
       if (!googleUser || !googleUser.email) {
@@ -90,7 +91,7 @@ export const userRouter = router({
 
   // Login with email and password
   login: publicProcedure
-    .input(z.object({ email: z.string().email(), password: z.string() }))
+    .input(loginSchema)
     .mutation(async ({ input }) => {
       const { email, password } = input;
 
@@ -121,10 +122,7 @@ export const userRouter = router({
     }),
 
   socialLogin: publicProcedure
-    .input(z.object({
-      provider: z.enum(['google', 'apple']),
-      token: z.string(),
-    }))
+    .input(socialLoginSchema)
     .mutation(async ({ input }) => {
       const { provider, token } = input;
       let socialData: { sub: string, email: string, name?: string } | null = null;
@@ -221,13 +219,7 @@ export const userRouter = router({
 
   // Protected procedure: Update profile
   updateProfile: protectedProcedure
-    .input(z.object({
-      name: z.string().optional(),
-      timezone: z.string().optional(),
-      avatarUrl: z.string().optional(),
-      theme: z.string().optional(),
-      notificationsEnabled: z.boolean().optional(),
-    }))
+    .input(updateProfileSchema)
     .mutation(async ({ ctx, input }) => {
       return prisma.user.update({
         where: { id: ctx.user.id },
@@ -237,11 +229,7 @@ export const userRouter = router({
 
   // Protected procedure: Register push token
   registerPushToken: protectedProcedure
-    .input(z.object({
-      token: z.string(),
-      deviceId: z.string().optional(),
-      platform: z.enum(['web', 'ios', 'android']),
-    }))
+    .input(pushTokenSchema)
     .mutation(async ({ ctx, input }) => {
       const { token, deviceId, platform } = input;
       

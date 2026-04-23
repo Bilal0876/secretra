@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
-  Alert,
 } from 'react-native';
 import {
   BottomSheetModal,
@@ -22,7 +21,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   CheckCircle2,
-  Circle,
   Plus,
   Filter,
   ChevronRight,
@@ -30,8 +28,10 @@ import {
   AlertCircle,
   X,
   Trash2,
+  Bell,
 } from 'lucide-react-native';
 import { trpc } from '../../utils/trpc';
+import { scheduleTaskReminder } from '../../utils/notifications';
 
 const NAVY = '#111827';
 const SURFACE = '#f6f5f3';
@@ -39,7 +39,7 @@ const BORDER = '#f0eeec';
 const MUTED = '#9ca3af';
 const CORAL = '#e87a6e';
 
-type TaskPriority = 'P1' | 'P2' | 'P3' | 'P4';
+type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
 type TaskStatus = 'todo' | 'in_progress' | 'done';
 
 interface Task {
@@ -50,15 +50,26 @@ interface Task {
   status: TaskStatus;
   startDate?: string | null;
   dueDate?: string | null;
+  reminderMinutes?: number | null;
 }
 
 // ── Priority config ──
-const PRIORITY_COLOR: Record<TaskPriority, string> = {
-  P1: '#ef4444',
-  P2: '#f59e0b',
-  P3: '#3b82f6',
-  P4: '#9ca3af',
+const PRIORITIES: TaskPriority[] = ['low', 'medium', 'high', 'critical'];
+
+const PRIORITY_STYLES: Record<TaskPriority, { bg: string; text: string; activeBg: string }> = {
+  low: { bg: '#eff6ff', text: '#3b82f6', activeBg: '#3b82f6' },
+  medium: { bg: '#f0fdf4', text: '#16a34a', activeBg: '#16a34a' },
+  high: { bg: '#fffbeb', text: '#d97706', activeBg: '#d97706' },
+  critical: { bg: '#fef2f2', text: '#ef4444', activeBg: '#ef4444' },
 };
+
+const REMINDER_OPTIONS = [
+  { label: 'None', minutes: null },
+  { label: 'At start', minutes: 0 },
+  { label: '5 min', minutes: 5 },
+  { label: '15 min', minutes: 15 },
+  { label: '1 hour', minutes: 60 },
+];
 
 // ── Shared sheet helpers ──
 const renderBackdrop = (props: any) => (
@@ -119,21 +130,26 @@ const GhostBtn = ({ onPress, label }: any) => (
 );
 
 // ── Priority pill ──
-const PriorityPill = ({ value, active, onPress }: any) => (
-  <TouchableOpacity
-    onPress={onPress}
-    style={{
-      flex: 1, paddingVertical: 10, borderRadius: 10,
-      alignItems: 'center',
-      backgroundColor: active ? NAVY : 'white',
-      borderWidth: 1,
-      borderColor: active ? NAVY : BORDER,
-    }}
-    activeOpacity={0.7}
-  >
-    <Text style={{ fontWeight: '700', fontSize: 13, color: active ? 'white' : MUTED }}>{value}</Text>
-  </TouchableOpacity>
-);
+const PriorityPill = ({ value, active, onPress }: { value: TaskPriority, active: boolean, onPress: () => void }) => {
+  const styles = PRIORITY_STYLES[value];
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{
+        flex: 1, paddingVertical: 10, borderRadius: 10,
+        alignItems: 'center',
+        backgroundColor: active ? styles.activeBg : '#f8fafc',
+        borderWidth: 1,
+        borderColor: active ? styles.activeBg : '#f1f5f9',
+      }}
+      activeOpacity={0.7}
+    >
+      <Text style={{ fontWeight: '700', fontSize: 12, textTransform: 'capitalize', color: active ? 'white' : styles.text }}>
+        {value}
+      </Text>
+    </TouchableOpacity>
+  );
+};
 
 // ── Chip (filter) ──
 const Chip = ({ label, active, coral, onPress }: any) => (
@@ -187,7 +203,7 @@ function formatPickerDate(date: Date) {
 // ── Task row ──
 function TaskItem({ task, onToggle, onPress }: { task: any; onToggle: () => void; onPress: () => void }) {
   const isDone = task.status === 'done';
-  const pColor = PRIORITY_COLOR[task.priority as TaskPriority] ?? MUTED;
+  const pStyles = PRIORITY_STYLES[task.priority as TaskPriority] || PRIORITY_STYLES.medium;
 
   return (
     <TouchableOpacity
@@ -209,7 +225,7 @@ function TaskItem({ task, onToggle, onPress }: { task: any; onToggle: () => void
           </View>
         ) : (
           <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }}>
-            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: pColor, opacity: 0.5 }} />
+            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: pStyles.activeBg, opacity: 0.5 }} />
           </View>
         )}
       </TouchableOpacity>
@@ -222,15 +238,21 @@ function TaskItem({ task, onToggle, onPress }: { task: any; onToggle: () => void
         >
           {task.title}
         </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 8 }}>
-          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isDone ? '#e2e8f0' : pColor }} />
-          <Text style={{ fontSize: 11, fontWeight: '600', color: MUTED }}>{task.priority}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 6 }}>
+          <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: isDone ? '#f8fafc' : pStyles.bg }}>
+            <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDone ? '#cbd5e1' : pStyles.text }}>
+              {task.priority}
+            </Text>
+          </View>
           {(task.startDate || task.dueDate) && (
             <>
               <Text style={{ color: BORDER, fontSize: 11 }}>·</Text>
               <Clock size={10} color={MUTED} />
               <Text style={{ fontSize: 11, color: MUTED }} numberOfLines={1}>{formatTaskDate(task.startDate, task.dueDate)}</Text>
             </>
+          )}
+          {task.reminderMinutes !== null && task.reminderMinutes !== undefined && (
+            <Bell size={10} color={CORAL} style={{ marginLeft: 2 }} />
           )}
         </View>
       </View>
@@ -284,12 +306,16 @@ export default function TasksScreen() {
   // Form
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
-  const [newPriority, setNewPriority] = useState<TaskPriority>('P3');
+  const [newPriority, setNewPriority] = useState<TaskPriority>('medium');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [dueDate, setDueDate] = useState<Date | null>(null);
+  const [reminder, setReminder] = useState<number | null>(5);
+  
   const [showPicker, setShowPicker] = useState(false);
   const [pickerTarget, setPickerTarget] = useState<'start' | 'end'>('start');
   const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
+  
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const addModalRef = useRef<BottomSheetModal>(null);
   const filterModalRef = useRef<BottomSheetModal>(null);
@@ -301,30 +327,38 @@ export default function TasksScreen() {
 
   const { data: tasks, isLoading, refetch, isRefetching, isError } = trpc.task.getTasks.useQuery();
 
+  const handleReminderSetup = async (taskData: any) => {
+    if (taskData.reminderMinutes !== null && taskData.reminderMinutes !== undefined && taskData.startDate) {
+      await scheduleTaskReminder(taskData.title, new Date(taskData.startDate), taskData.reminderMinutes, taskData.id);
+    }
+  };
+
   const createTaskMutation = trpc.task.createTask.useMutation({
-    onSuccess: () => { refetch(); setAddModalVisible(false); resetForm(); },
-    onError: (err) => Alert.alert('Error', err.message),
+    onSuccess: async (newT: any) => { 
+      await handleReminderSetup(newT);
+      refetch(); 
+      setAddModalVisible(false); 
+      resetForm(); 
+    },
+    onError: (err) => {
+      setServerError(err.message);
+    },
   });
+  
   const updateTaskMutation = trpc.task.updateTask.useMutation({
-    onSuccess: () => { refetch(); setDetailModalVisible(false); },
-    onError: (err) => Alert.alert('Error', err.message),
+    onSuccess: async (upT: any) => { 
+      await handleReminderSetup(upT);
+      refetch(); 
+      setDetailModalVisible(false); 
+    },
+    onError: (err) => {
+      setServerError(err.message);
+    },
   });
+  
   const deleteTaskMutation = trpc.task.deleteTask.useMutation({
     onSuccess: () => { refetch(); setDetailModalVisible(false); },
-    onError: (err) => Alert.alert('Error', err.message),
   });
-
-  // Conflict detection for current user
-  const availabilityQuery = trpc.calendar.getTeamAvailability.useQuery(
-    {
-      // Mock a group or use a dedicated check personal procedure? 
-      // For now, let's use a simple personal check or just rely on the error from mutation.
-      // But user wants "real-time" feedback. 
-      // I'll create a new procedure in calendar.ts for personal availability check.
-      groupId: '', // Special case or just use a new one
-    },
-    { enabled: false }
-  );
 
   const checkPersonalConflicts = trpc.calendar.getEvents.useQuery(
     {
@@ -336,29 +370,42 @@ export default function TasksScreen() {
     }
   );
 
-  // We check for conflicts in the returned events. 
-  // Optimization: Use a dedicated 'checkConflicts' procedure if available.
-  const hasConflict = useMemo(() => {
+  const realTimeConflict = useMemo(() => {
     const s = isDetailModalVisible ? selectedTask?.startDate : startDate?.toISOString();
     const e = isDetailModalVisible ? selectedTask?.dueDate : dueDate?.toISOString();
     if (!s || !e || !checkPersonalConflicts.data) return false;
-    
-    // The query returns events overlapping with the range. 
-    // If it returns anything (excluding the current task if it had an eventId), it's a conflict.
     return checkPersonalConflicts.data.length > 0;
   }, [checkPersonalConflicts.data, isDetailModalVisible, selectedTask, startDate, dueDate]);
 
-  const resetForm = () => { setNewTitle(''); setNewDesc(''); setNewPriority('P3'); setStartDate(null); setDueDate(null); };
+  const resetForm = () => { 
+    setNewTitle(''); setNewDesc(''); setNewPriority('medium'); 
+    setStartDate(null); setDueDate(null); setReminder(5); setServerError(null);
+  };
 
   const toggleTask = (id: string, currentStatus: string) =>
     updateTaskMutation.mutate({ id, status: currentStatus === 'done' ? 'todo' : 'done' });
 
   const handleCreateTask = () => {
     if (!newTitle.trim()) return;
-    const payload: any = { title: newTitle, description: newDesc, priority: newPriority };
+    setServerError(null);
+    const payload: any = { title: newTitle, description: newDesc, priority: newPriority, reminderMinutes: reminder };
     if (startDate) payload.startDate = startDate.toISOString();
     if (dueDate) payload.dueDate = dueDate.toISOString();
     createTaskMutation.mutate(payload);
+  };
+
+  const handleUpdateTask = () => {
+    if (!selectedTask?.title.trim()) return;
+    setServerError(null);
+    updateTaskMutation.mutate({
+      id: selectedTask.id,
+      title: selectedTask.title,
+      description: selectedTask.description || undefined,
+      priority: selectedTask.priority,
+      startDate: selectedTask.startDate,
+      dueDate: selectedTask.dueDate,
+      reminderMinutes: selectedTask.reminderMinutes,
+    });
   };
 
   const handlePickerChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
@@ -386,18 +433,6 @@ export default function TasksScreen() {
     }
   };
 
-  const handleUpdateTask = () => {
-    if (!selectedTask?.title.trim()) return;
-    updateTaskMutation.mutate({
-      id: selectedTask.id,
-      title: selectedTask.title,
-      description: selectedTask.description || undefined,
-      priority: selectedTask.priority,
-      startDate: selectedTask.startDate,
-      dueDate: selectedTask.dueDate,
-    });
-  };
-
   const filteredTasks = tasks?.filter((task: any) => {
     if (activeTab === 'done' && task.status !== 'done') return false;
     if (activeTab === 'active' && task.status === 'done') return false;
@@ -423,21 +458,9 @@ export default function TasksScreen() {
 
   const todayText = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase();
 
-  // ── Loading ──
   if (isLoading && !isRefetching) return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: SURFACE }}>
       <ActivityIndicator size="small" color={NAVY} />
-    </View>
-  );
-
-  // ── Error ──
-  if (isError) return (
-    <View style={{ flex: 1, backgroundColor: SURFACE, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-      <AlertCircle color="#ef4444" size={28} />
-      <Text style={{ color: NAVY, fontSize: 16, fontWeight: '700', marginTop: 12 }}>Failed to load tasks</Text>
-      <TouchableOpacity onPress={() => refetch()} style={{ marginTop: 16, paddingVertical: 12, paddingHorizontal: 24, backgroundColor: NAVY, borderRadius: 12 }}>
-        <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
-      </TouchableOpacity>
     </View>
   );
 
@@ -460,7 +483,7 @@ export default function TasksScreen() {
             <Text style={{ fontSize: 26, fontWeight: '800', color: NAVY, letterSpacing: -0.5 }}>Tasks</Text>
           </View>
           <TouchableOpacity
-            onPress={() => setAddModalVisible(true)}
+            onPress={() => { resetForm(); setAddModalVisible(true); }}
             activeOpacity={0.85}
             style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: NAVY, alignItems: 'center', justifyContent: 'center' }}
           >
@@ -515,7 +538,12 @@ export default function TasksScreen() {
               key={task.id}
               task={task}
               onToggle={() => toggleTask(task.id, task.status)}
-              onPress={() => { setSelectedTask(task); setDetailModalVisible(true); setShowDeleteConfirm(false); }}
+              onPress={() => { 
+                setSelectedTask(task); 
+                setServerError(null);
+                setDetailModalVisible(true); 
+                setShowDeleteConfirm(false); 
+              }}
             />
           ))
         )}
@@ -526,7 +554,7 @@ export default function TasksScreen() {
       ══════════════════════════════════════ */}
       <BottomSheetModal
         ref={addModalRef}
-        snapPoints={['75%']}
+        snapPoints={['80%']}
         enablePanDownToClose
         onChange={(i) => { if (i === -1) setAddModalVisible(false); }}
         keyboardBehavior="interactive"
@@ -580,21 +608,62 @@ export default function TasksScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+
+          {/* Reminder Dropdown row equivalent */}
+          {startDate && (
+            <>
+              <SheetLabel>Reminder</SheetLabel>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
+                {REMINDER_OPTIONS.map((opt, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => setReminder(opt.minutes)}
+                    activeOpacity={0.7}
+                    style={{
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      backgroundColor: reminder === opt.minutes ? NAVY : 'white',
+                      borderWidth: 1,
+                      borderColor: reminder === opt.minutes ? NAVY : BORDER,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: reminder === opt.minutes ? 'white' : MUTED }}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
+
           <SheetLabel>Priority</SheetLabel>
           <View style={{ flexDirection: 'row', gap: 8, marginBottom: 24 }}>
-            {(['P1', 'P2', 'P3', 'P4'] as TaskPriority[]).map((p) => (
-              <PriorityPill key={p} value={p} active={newPriority === p} onPress={() => setNewPriority(p)} />
+            {PRIORITIES.map((p) => (
+              <PriorityPill key={p} value={p as TaskPriority} active={newPriority === p} onPress={() => setNewPriority(p as TaskPriority)} />
             ))}
           </View>
 
           {/* Conflict Warning */}
-          {hasConflict && (
+          {serverError && (
+            <View style={{ marginBottom: 24, backgroundColor: '#fef2f2', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#fecaca', flexDirection: 'row', gap: 12 }}>
+              <AlertCircle size={20} color="#ef4444" />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#b91c1c' }}>Cannot save task</Text>
+                <Text style={{ fontSize: 13, color: '#dc2626', marginTop: 4, lineHeight: 20 }}>
+                  {serverError}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {(!serverError && realTimeConflict) && (
             <View style={{ marginBottom: 24, backgroundColor: '#fff7ed', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#fed7aa', flexDirection: 'row', gap: 10 }}>
               <AlertCircle size={18} color="#ea580c" />
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: '#9a3412' }}>Schedule Conflict</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#9a3412' }}>Note: Schedule Conflict</Text>
                 <Text style={{ fontSize: 12, color: '#c2410c', marginTop: 2 }}>
-                  This task overlaps with existing events or tasks on your calendar.
+                  This task overlaps with your existing calendar events.
                 </Text>
               </View>
             </View>
@@ -617,7 +686,7 @@ export default function TasksScreen() {
       ══════════════════════════════════════ */}
       <BottomSheetModal
         ref={filterModalRef}
-        snapPoints={['48%']}
+        snapPoints={['50%']}
         enablePanDownToClose
         onChange={(i) => { if (i === -1) setFilterModalVisible(false); }}
         backdropComponent={renderBackdrop}
@@ -642,8 +711,8 @@ export default function TasksScreen() {
 
           <SheetLabel>Priority</SheetLabel>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 }}>
-            {(['ALL', 'P1', 'P2', 'P3', 'P4'] as const).map((p) => (
-              <Chip key={p} label={p === 'ALL' ? 'Any' : p} active={filterPriority === p} onPress={() => setFilterPriority(p)} />
+            {(['ALL', ...PRIORITIES] as const).map((p) => (
+              <Chip key={p} label={p === 'ALL' ? 'Any' : p} active={filterPriority === p} onPress={() => setFilterPriority(p as any)} />
             ))}
           </View>
 
@@ -664,7 +733,7 @@ export default function TasksScreen() {
       ══════════════════════════════════════ */}
       <BottomSheetModal
         ref={detailModalRef}
-        snapPoints={['80%']}
+        snapPoints={['85%']}
         enablePanDownToClose
         onChange={(i) => { if (i === -1) { setDetailModalVisible(false); setShowDeleteConfirm(false); } }}
         keyboardBehavior="interactive"
@@ -714,13 +783,13 @@ export default function TasksScreen() {
             </View>
 
             <SheetLabel>Title</SheetLabel>
-            <SheetInput value={selectedTask.title} onChangeText={(t) => setSelectedTask({ ...selectedTask, title: t })} />
+            <SheetInput value={selectedTask.title} onChangeText={(t) => { setServerError(null); setSelectedTask({ ...selectedTask, title: t }); }} />
 
             <SheetLabel>Description</SheetLabel>
             <SheetInput
               multiline placeholder="Add details"
               value={selectedTask.description || ''}
-              onChangeText={(t) => setSelectedTask({ ...selectedTask, description: t })}
+              onChangeText={(t) => { setServerError(null); setSelectedTask({ ...selectedTask, description: t }); }}
               style={{ minHeight: 72, textAlignVertical: 'top' }}
             />
 
@@ -748,12 +817,65 @@ export default function TasksScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* Reminder Dropdown row */}
+            {selectedTask.startDate && (
+              <>
+                <SheetLabel>Reminder</SheetLabel>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
+                  {REMINDER_OPTIONS.map((opt, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      onPress={() => setSelectedTask({ ...selectedTask, reminderMinutes: opt.minutes })}
+                      activeOpacity={0.7}
+                      style={{
+                        paddingHorizontal: 16,
+                        paddingVertical: 10,
+                        borderRadius: 10,
+                        backgroundColor: selectedTask.reminderMinutes === opt.minutes ? NAVY : 'white',
+                        borderWidth: 1,
+                        borderColor: selectedTask.reminderMinutes === opt.minutes ? NAVY : BORDER,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: selectedTask.reminderMinutes === opt.minutes ? 'white' : MUTED }}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
+
             <SheetLabel>Priority</SheetLabel>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 24 }}>
-              {(['P1', 'P2', 'P3', 'P4'] as TaskPriority[]).map((p) => (
+              {PRIORITIES.map((p) => (
                 <PriorityPill key={p} value={p} active={selectedTask.priority === p} onPress={() => setSelectedTask({ ...selectedTask, priority: p })} />
               ))}
             </View>
+
+            {/* Conflict Warning */}
+            {serverError && (
+              <View style={{ marginBottom: 24, backgroundColor: '#fef2f2', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#fecaca', flexDirection: 'row', gap: 12 }}>
+                <AlertCircle size={20} color="#ef4444" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#b91c1c' }}>Cannot update task</Text>
+                  <Text style={{ fontSize: 13, color: '#dc2626', marginTop: 4, lineHeight: 20 }}>
+                    {serverError}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {(!serverError && realTimeConflict) && (
+              <View style={{ marginBottom: 24, backgroundColor: '#fff7ed', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#fed7aa', flexDirection: 'row', gap: 10 }}>
+                <AlertCircle size={18} color="#ea580c" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#9a3412' }}>Note: Schedule Conflict</Text>
+                  <Text style={{ fontSize: 12, color: '#c2410c', marginTop: 2 }}>
+                    This task overlaps with your existing calendar events.
+                  </Text>
+                </View>
+              </View>
+            )}
 
             {/* Actions */}
             <View style={{ flexDirection: 'row', gap: 10 }}>

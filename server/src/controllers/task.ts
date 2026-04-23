@@ -1,8 +1,12 @@
-import { z } from 'zod';
 import { router, protectedProcedure } from '../trpcBase';
-import { TaskPriority, TaskStatus } from '@ps/db';
 import prisma from '../shared/prisma';
 import { checkConflicts } from '../services/conflictService';
+import {
+  taskFilterSchema,
+  taskInputSchema,
+  taskUpdateSchema,
+  idParam,
+} from '../schemas';
 
 function formatTime(date: Date) {
   return date.toLocaleTimeString('en-US', {
@@ -15,10 +19,7 @@ function formatTime(date: Date) {
 export const taskRouter = router({
   // Get all tasks for the current user
   getTasks: protectedProcedure
-    .input(z.object({
-      status: z.nativeEnum(TaskStatus).optional(),
-      priority: z.nativeEnum(TaskPriority).optional(),
-    }).optional())
+    .input(taskFilterSchema)
     .query(async ({ ctx, input }) => {
       return prisma.task.findMany({
         where: {
@@ -33,14 +34,7 @@ export const taskRouter = router({
 
   // Create a new task
   createTask: protectedProcedure
-    .input(z.object({
-      title: z.string().min(1),
-      description: z.string().optional(),
-      priority: z.nativeEnum(TaskPriority).default(TaskPriority.P3),
-      status: z.nativeEnum(TaskStatus).default(TaskStatus.todo),
-      startDate: z.string().datetime().optional(),
-      dueDate: z.string().datetime().optional(),
-    }))
+    .input(taskInputSchema)
     .mutation(async ({ ctx, input }) => {
       // Find the last task's sortOrder to append this one
       const lastTask = await prisma.task.findFirst({
@@ -76,16 +70,7 @@ export const taskRouter = router({
 
   // Update task (position/status/title)
   updateTask: protectedProcedure
-    .input(z.object({
-      id: z.string().uuid(),
-      title: z.string().optional(),
-      description: z.string().optional(),
-      priority: z.nativeEnum(TaskPriority).optional(),
-      status: z.nativeEnum(TaskStatus).optional(),
-      startDate: z.string().datetime().nullable().optional(),
-      dueDate: z.string().datetime().nullable().optional(),
-      sortOrder: z.string().optional(),
-    }))
+    .input(taskUpdateSchema)
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
 
@@ -112,7 +97,7 @@ export const taskRouter = router({
 
   // Soft delete task
   deleteTask: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(idParam)
     .mutation(async ({ ctx, input }) => {
       return prisma.task.update({
         where: { id: input.id, userId: ctx.user.id },

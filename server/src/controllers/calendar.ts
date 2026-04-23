@@ -1,9 +1,16 @@
-import { z } from 'zod';
 import { router, protectedProcedure } from '../trpcBase';
-import { EventPriority, EventStatus, GroupMemberStatus } from '@ps/db';
+import { GroupMemberStatus } from '@ps/db';
 import prisma from '../shared/prisma';
 import { emitSignal } from '../socket';
 import { checkConflicts } from '../services/conflictService';
+import {
+  eventInputSchema,
+  eventUpdateSchema,
+  eventFilterSchema,
+  teamMemberCalendarSchema,
+  teamAvailabilitySchema,
+  idParam,
+} from '../schemas';
 
 function formatTime(date: Date) {
   return date.toLocaleTimeString('en-US', {
@@ -13,37 +20,10 @@ function formatTime(date: Date) {
   });
 }
 
-// Explicitly define schemas to help TS inference in some IDE environments
-const eventInputSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().optional(),
-  location: z.string().optional(),
-  eventType: z.string().default('event'),
-  priority: z.nativeEnum(EventPriority).default(EventPriority.medium),
-  status: z.nativeEnum(EventStatus).default(EventStatus.confirmed),
-  startAt: z.string().datetime(),
-  endAt: z.string().datetime(),
-  groupId: z.string().uuid().optional(),
-  attendeeIds: z.array(z.string().uuid()).optional(),
-  reminderMinutes: z.number().int().nullable().optional(),
-  isAllDay: z.boolean().optional().default(false),
-});
-
-const eventUpdateSchema = eventInputSchema.extend({
-  id: z.string().uuid(),
-  title: z.string().optional(),
-  startAt: z.string().datetime().optional(),
-  endAt: z.string().datetime().optional(),
-});
-
 export const calendarRouter = router({
   // Get all events for the current user
   getEvents: protectedProcedure
-    .input(z.object({
-      groupId: z.string().uuid().optional(),
-      startDate: z.string().datetime().optional(),
-      endDate: z.string().datetime().optional(),
-    }).optional())
+    .input(eventFilterSchema)
     .query(async ({ ctx, input }) => {
       const filters: any = {
         OR: [
@@ -75,12 +55,7 @@ export const calendarRouter = router({
 
   // Get events for a specific member in a group context
   getTeamMemberCalendar: protectedProcedure
-    .input(z.object({
-      groupId: z.string().uuid(),
-      memberId: z.string().uuid(),
-      startDate: z.string().datetime().optional(),
-      endDate: z.string().datetime().optional(),
-    }))
+    .input(teamMemberCalendarSchema)
     .query(async ({ input }) => {
       const events = await prisma.event.findMany({
         where: {
@@ -241,7 +216,7 @@ export const calendarRouter = router({
 
   // Delete an event
   deleteEvent: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(idParam)
     .mutation(async ({ ctx, input }) => {
       const event = await prisma.event.findFirst({
         where: { id: input.id, userId: ctx.user.id },
@@ -266,11 +241,7 @@ export const calendarRouter = router({
 
   // Check availability for all members of a group within a time range
   getTeamAvailability: protectedProcedure
-    .input(z.object({
-      groupId: z.string().uuid(),
-      startDate: z.string().datetime(),
-      endDate: z.string().datetime(),
-    }))
+    .input(teamAvailabilitySchema)
     .query(async ({ input }) => {
       const { groupId, startDate, endDate } = input;
       const start = new Date(startDate);

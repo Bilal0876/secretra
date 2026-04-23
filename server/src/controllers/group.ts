@@ -1,20 +1,16 @@
-import { z } from 'zod';
 import { router, protectedProcedure } from '../trpcBase';
 import { TRPCError } from '@trpc/server';
 import { GroupMemberStatus } from '@ps/db';
 import prisma from '../shared/prisma';
 import { emitSignal } from '../socket';
-
-const groupInputSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  imageUrl: z.string().optional(),
-});
-
-const groupMemberInputSchema = z.object({
-  groupId: z.string().uuid(),
-  email: z.string().email(),
-});
+import {
+  groupInputSchema,
+  groupUpdateSchema,
+  groupMemberInputSchema,
+  groupIdParam,
+  removeGroupMemberSchema,
+  idParam,
+} from '../schemas';
 
 export const groupRouter = router({
   getGroups: protectedProcedure
@@ -34,7 +30,7 @@ export const groupRouter = router({
     }),
 
   getGroup: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(idParam)
     .query(async ({ ctx, input }) => {
       const group = await prisma.group.findFirst({
         where: {
@@ -90,12 +86,7 @@ export const groupRouter = router({
     }),
 
   updateGroup: protectedProcedure
-    .input(z.object({
-      id: z.string().uuid(),
-      name: z.string().min(1).optional(),
-      description: z.string().optional(),
-      imageUrl: z.string().optional(),
-    }))
+    .input(groupUpdateSchema)
     .mutation(async ({ ctx, input }) => {
       const group = await prisma.group.findFirst({
         where: { id: input.id, userId: ctx.user.id },
@@ -173,7 +164,7 @@ export const groupRouter = router({
     }),
 
   acceptInvite: protectedProcedure
-    .input(z.object({ groupId: z.string().uuid() }))
+    .input(groupIdParam)
     .mutation(async ({ ctx, input }) => {
       const member = await prisma.groupMember.findFirst({
         where: {
@@ -201,7 +192,7 @@ export const groupRouter = router({
     }),
 
   rejectInvite: protectedProcedure
-    .input(z.object({ groupId: z.string().uuid() }))
+    .input(groupIdParam)
     .mutation(async ({ ctx, input }) => {
       const member = await prisma.groupMember.findFirst({
         where: {
@@ -227,7 +218,7 @@ export const groupRouter = router({
     }),
 
   removeGroupMember: protectedProcedure
-    .input(z.object({ groupId: z.string().uuid(), memberId: z.string().uuid() }))
+    .input(removeGroupMemberSchema)
     .mutation(async ({ ctx, input }) => {
       const group = await prisma.group.findFirst({
         where: { id: input.groupId, userId: ctx.user.id },
@@ -266,7 +257,7 @@ export const groupRouter = router({
     }),
 
   leaveGroup: protectedProcedure
-    .input(z.object({ groupId: z.string().uuid() }))
+    .input(groupIdParam)
     .mutation(async ({ ctx, input }) => {
       // Find the member record for the current user
       const member = await prisma.groupMember.findFirst({
