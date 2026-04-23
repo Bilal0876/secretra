@@ -27,7 +27,7 @@ export const initSocket = (httpServer: HTTPServer) => {
 
   io.on('connection', async (socket) => {
     const userId = (socket as any).userId;
-    console.log(`📡 User connected to socket: ${userId} (${socket.id})`);
+    console.log(` User connected to socket: ${userId} (${socket.id})`);
 
     // Join user-specific room
     socket.join(`user:${userId}`);
@@ -41,14 +41,14 @@ export const initSocket = (httpServer: HTTPServer) => {
 
       userGroups.forEach((g) => {
         socket.join(`group:${g.groupId}`);
-        console.log(`🏠 Joined group room: group:${g.groupId}`);
+        console.log(` Joined group room: group:${g.groupId}`);
       });
     } catch (err) {
       console.error('Error joining group rooms:', err);
     }
 
     socket.on('disconnect', () => {
-      console.log(`👋 User disconnected from socket: ${userId}`);
+      console.log(` User disconnected from socket: ${userId}`);
     });
   });
 
@@ -73,7 +73,7 @@ export const emitSignal = async (target: { userId?: string; groupId?: string }, 
   if (target.userId) {
     io.to(`user:${target.userId}`).emit(event, data);
   }
-  
+
   if (target.groupId) {
     // Also emit to the group room for anyone already in it
     io.to(`group:${target.groupId}`).emit(event, data);

@@ -25,6 +25,8 @@ const eventInputSchema = z.object({
   endAt: z.string().datetime(),
   groupId: z.string().uuid().optional(),
   attendeeIds: z.array(z.string().uuid()).optional(),
+  reminderMinutes: z.number().int().nullable().optional(),
+  isAllDay: z.boolean().optional().default(false),
 });
 
 const eventUpdateSchema = eventInputSchema.extend({
@@ -139,6 +141,9 @@ export const calendarRouter = router({
       const event = await prisma.event.create({
         data: {
           ...rest,
+          isAllDay: input.isAllDay,
+          priority: input.priority,
+          reminderMinutes: input.reminderMinutes,
           userId: ctx.user.id,
           groupId,
           startAt: start,
@@ -202,6 +207,9 @@ export const calendarRouter = router({
         where: { id },
         data: {
           ...data,
+          isAllDay: input.isAllDay,
+          priority: input.priority,
+          reminderMinutes: input.reminderMinutes,
           groupId,
           ...(startAt ? { startAt: start } : {}),
           ...(endAt ? { endAt: end } : {}),
@@ -301,22 +309,43 @@ export const calendarRouter = router({
   getDashboardOverview: protectedProcedure
     .query(async ({ ctx }) => {
       const now = new Date();
-      const nextEvent = await prisma.event.findFirst({
-        where: {
-          OR: [
-            { userId: ctx.user.id },
-            { attendees: { some: { id: ctx.user.id } } },
-          ],
-          startAt: { gte: now },
-        },
-        orderBy: { startAt: 'asc' },
-        include: {
-          group: { select: { name: true } },
-        },
-      });
+      const startOfToday = new Date(now);
+      startOfToday.setHours(0, 0, 0, 0);
+      
+      const endOfToday = new Date(now);
+      endOfToday.setHours(23, 59, 59, 999);
+
+      const [nextEvent, todayCount] = await Promise.all([
+        prisma.event.findFirst({
+          where: {
+            OR: [
+              { userId: ctx.user.id },
+              { attendees: { some: { id: ctx.user.id } } },
+            ],
+            startAt: { gte: now },
+          },
+          orderBy: { startAt: 'asc' },
+          include: {
+            group: { select: { name: true } },
+          },
+        }),
+        prisma.event.count({
+          where: {
+            OR: [
+              { userId: ctx.user.id },
+              { attendees: { some: { id: ctx.user.id } } },
+            ],
+            startAt: {
+              gte: startOfToday,
+              lte: endOfToday,
+            },
+          },
+        }),
+      ]);
 
       return {
         nextEvent,
+        todayCount,
       };
     }),
 });

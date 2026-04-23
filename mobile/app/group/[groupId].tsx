@@ -483,6 +483,17 @@ export default function GroupDetailPage() {
 
   const insets = useSafeAreaInsets();
 
+  // ── Graceful Redirection on Removal ──
+  useEffect(() => {
+    if (isError) {
+      // If we hit an error (e.g. removed from group), redirect after a short delay
+      const timer = setTimeout(() => {
+        router.replace('/dashboard');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isError]);
+
   // ── Loading ──
   if (isLoading) return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: SURFACE }}>
@@ -498,15 +509,15 @@ export default function GroupDetailPage() {
         <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
           <AlertCircle color="#ef4444" size={24} />
         </View>
-        <Text style={{ color: NAVY, fontSize: 16, fontWeight: '800', textAlign: 'center' }}>Department not found</Text>
+        <Text style={{ color: NAVY, fontSize: 16, fontWeight: '800', textAlign: 'center' }}>Access Revoked</Text>
         <Text style={{ color: MUTED, fontSize: 13, textAlign: 'center', marginTop: 6, lineHeight: 20 }}>
-          It may have been deleted or you don't have access.
+          You no longer have access to this department. Returning to dashboard in 3 seconds...
         </Text>
         <TouchableOpacity
-          onPress={() => router.back()}
-          style={{ marginTop: 20, paddingVertical: 12, paddingHorizontal: 28, backgroundColor: NAVY, borderRadius: 14 }}
+          onPress={() => router.replace('/dashboard')}
+          style={{ marginTop: 24, paddingVertical: 12, paddingHorizontal: 28, backgroundColor: NAVY, borderRadius: 14 }}
         >
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Go back</Text>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Return home now</Text>
         </TouchableOpacity>
       </View>
     );

@@ -140,6 +140,7 @@ model Event {
   rrule         String?
   location      String?
   color         String?
+  reminderMinutes Int?          @map("reminder_minutes")
   tasks         Task[]
   reminders     Reminder[]
   attendees     User[]        @relation("EventAttendees")

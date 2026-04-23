@@ -154,6 +154,8 @@ export default function DashboardScreen() {
         index={0}
         snapPoints={snapPoints}
         enablePanDownToClose
+        enableDynamicSizing={false}   // ← add this
+        topInset={0}                  // ← add this
         backdropComponent={renderBackdrop}
         handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.2)', width: 40, height: 4 }}
         backgroundStyle={{ backgroundColor: '#16161f' }}
@@ -171,39 +173,44 @@ export default function DashboardScreen() {
               <ActivityIndicator color="#e87a6e" size="large" />
             </View>
           ) : mappedInvites.length === 0 ? (
-            <View style={{ height: 80, justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Nothing here yet</Text>
+            <View style={{ height: 120, justifyContent: 'center', alignItems: 'center' }}>
+              <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13, textAlign: 'center' }}>Nothing here yet</Text>
             </View>
           ) : (
             <BottomSheetScrollView style={{ flex: 1, marginBottom: 16 }} showsVerticalScrollIndicator={false}>
-              {mappedInvites.map((invite) => (
-                <View key={invite.groupId} style={M.inviteCard}>
-                  <Text style={M.inviteName}>{invite.groupName}</Text>
-                  {invite.groupDescription && (
-                    <Text style={M.inviteDesc}>{invite.groupDescription}</Text>
-                  )}
-                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-                    <TouchableOpacity
-                      onPress={() => rejectInviteMutation.mutate({ groupId: invite.groupId })}
-                      disabled={rejectInviteMutation.variables?.groupId === invite.groupId}
-                      style={[M.inviteBtnReject, rejectInviteMutation.variables?.groupId === invite.groupId && { opacity: 0.5 }]}
-                    >
-                      {rejectInviteMutation.variables?.groupId === invite.groupId
-                        ? <ActivityIndicator color="#ff6b6b" size="small" />
-                        : <Text style={{ color: '#ff6b6b', fontWeight: '600', fontSize: 13 }}>Decline</Text>}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => acceptInviteMutation.mutate({ groupId: invite.groupId })}
-                      disabled={acceptInviteMutation.variables?.groupId === invite.groupId}
-                      style={[M.inviteBtnAccept, acceptInviteMutation.variables?.groupId === invite.groupId && { opacity: 0.6 }]}
-                    >
-                      {acceptInviteMutation.variables?.groupId === invite.groupId
-                        ? <ActivityIndicator color="#fff" size="small" />
-                        : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Accept</Text>}
-                    </TouchableOpacity>
+              {mappedInvites.map((invite) => {
+                const isAccepting = acceptInviteMutation.isPending && acceptInviteMutation.variables?.groupId === invite.groupId;
+                const isRejecting = rejectInviteMutation.isPending && rejectInviteMutation.variables?.groupId === invite.groupId;
+
+                return (
+                  <View key={invite.groupId} style={M.inviteCard}>
+                    <Text style={M.inviteName}>{invite.groupName}</Text>
+                    {invite.groupDescription && (
+                      <Text style={M.inviteDesc}>{invite.groupDescription}</Text>
+                    )}
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+                      <TouchableOpacity
+                        onPress={() => rejectInviteMutation.mutate({ groupId: invite.groupId })}
+                        disabled={isRejecting || isAccepting}
+                        style={[M.inviteBtnReject, (isRejecting || isAccepting) && { opacity: 0.5 }]}
+                      >
+                        {isRejecting
+                          ? <ActivityIndicator color="#ff6b6b" size="small" />
+                          : <Text style={{ color: '#ff6b6b', fontWeight: '600', fontSize: 13 }}>Decline</Text>}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => acceptInviteMutation.mutate({ groupId: invite.groupId })}
+                        disabled={isAccepting || isRejecting}
+                        style={[M.inviteBtnAccept, (isAccepting || isRejecting) && { opacity: 0.6 }]}
+                      >
+                        {isAccepting
+                          ? <ActivityIndicator color="#fff" size="small" />
+                          : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Accept</Text>}
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </BottomSheetScrollView>
           )}
 

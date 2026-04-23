@@ -159,7 +159,7 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
     });
     const [showStartPicker, setShowStartPicker] = useState(false);
     const [showEndPicker, setShowEndPicker] = useState(false);
-    const [reminderMinutes, setReminderMinutes] = useState<number | null>(null);
+    const [reminderMinutes, setReminderMinutes] = useState<number | null>(5);
 
     const lastInitRef = useRef<string | null>(null);
     const prevVisibleRef = useRef(false);
@@ -263,6 +263,7 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                 setEnd(new Date(eventToEdit.endAt));
                 setEventType(eventTypeKey);
                 setCustomType(eventTypeKey === 'other' ? (eventToEdit.eventType ?? '') : '');
+                setReminderMinutes(eventToEdit.reminderMinutes ?? 5);
             } else {
                 // Reset for NEW event
                 setTitle('');
@@ -274,6 +275,7 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                 setPriority('medium');
                 setEventType('meeting');
                 setCustomType('');
+                setReminderMinutes(5);
                 
                 const d = new Date();
                 d.setMinutes(0, 0, 0);
@@ -298,7 +300,7 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
         setSelectedAttendeeIds([]);
         setIsAllDay(false); setPriority('medium');
         setEventType('meeting'); setCustomType('');
-        setReminderMinutes(null);
+        setReminderMinutes(5);
         onClose();
     }
 
@@ -316,10 +318,27 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
             startAt: startAt.toISOString(),
             endAt: endAt.toISOString(),
             eventType: eventType === 'other' ? (customType.trim() || 'other') : eventType,
+            reminderMinutes: reminderMinutes,
         };
 
         if (eventToEdit?.id) {
-            updateEvent({ id: eventToEdit.id, ...payload });
+            updateEvent({ id: eventToEdit.id, ...payload }, {
+                onSuccess: () => {
+                   if (reminderMinutes !== null) {
+                        try {
+                            const { scheduleEventReminder } = require('../utils/notifications');
+                            scheduleEventReminder(
+                                title.trim(),
+                                new Date(startAt),
+                                reminderMinutes,
+                                eventToEdit.id
+                            );
+                        } catch (e) {
+                            console.error('Failed to reschedule local reminder:', e);
+                        }
+                    }
+                }
+            });
         } else {
             createEvent(payload, {
                 onSuccess: (newEvent) => {

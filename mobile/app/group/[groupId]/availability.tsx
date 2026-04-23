@@ -299,16 +299,31 @@ export default function AvailabilityScreen() {
                   {(m.conflictingEvents || []).map((ev: any, blockIdx: number) => {
                     const start = new Date(ev.start);
                     const end = new Date(ev.end);
-                    const startMin = start.getHours() * 60 + start.getMinutes();
-                    const endMin = end.getHours() * 60 + end.getMinutes();
+                    
+                    const dayStart = new Date(selectedDate);
+                    dayStart.setHours(0,0,0,0);
+                    const dayEnd = new Date(selectedDate);
+                    dayEnd.setHours(23,59,59,999);
 
-                    // Skip if event ends before grid starts (8 AM) or starts after grid ends (10 PM)
-                    if (endMin <= 480 || startMin >= 1320) return null;
-                    if (start.toDateString() !== selectedDate.toDateString()) return null;
+                    // Skip if event doesn't overlap with this day at all
+                    if (start > dayEnd || end < dayStart) return null;
 
-                    // Grid starts at 8 AM (8 * 60 = 480 mins)
-                    const top = Math.max(0, ((startMin - 480) / 60) * HOUR_HEIGHT);
-                    const height = Math.max(((endMin - Math.max(480, startMin)) / 60) * HOUR_HEIGHT, 18);
+                    // Grid window: 8 AM to 10 PM (8*60 to 22*60)
+                    const viewStartMin = 480; 
+                    const viewEndMin = 1320;
+
+                    // Minutes relative to today's midnight
+                    const sMin = start < dayStart ? 0 : (start.getHours() * 60 + start.getMinutes());
+                    const eMin = end > dayEnd ? 1440 : (end.getHours() * 60 + end.getMinutes());
+
+                    // Skip if event is outside the 8 AM - 10 PM window
+                    if (eMin <= viewStartMin || sMin >= viewEndMin) return null;
+
+                    const displayStart = Math.max(sMin, viewStartMin);
+                    const displayEnd = Math.min(eMin, viewEndMin);
+
+                    const top = ((displayStart - viewStartMin) / 60) * HOUR_HEIGHT;
+                    const height = Math.max(((displayEnd - displayStart) / 60) * HOUR_HEIGHT, 18);
                     const isTask = ev.type === 'task';
                     return (
                       <View
