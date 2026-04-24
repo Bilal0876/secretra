@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "349f422f-c078-422f-a277-5abe460febcc"
+      }
+    },
+    "android": {
+      "package": "com.bilal.secretra"
+    }
+  }
+}
