@@ -49,7 +49,17 @@
     },
     "ios": {
       "bundleIdentifier": "com.bilal.secretra",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.bilal.secretra",
+              "com.googleusercontent.apps.32854911840-f607ufse7v03l19ht797i08mp2a0qtna"
+            ]
+          }
+        ]
+      }
     },
     "extra": {
       "router": {},
