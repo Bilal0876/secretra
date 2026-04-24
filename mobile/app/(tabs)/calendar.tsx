@@ -154,7 +154,7 @@ function EventItem({
       }}
     >
       {/* Left accent bar */}
-      <View style={{ width: 3, backgroundColor: meta.color }} />
+      <View style={{ width: 3 }} />
 
       <View style={{ flex: 1, padding: 13 }}>
         {/* Top row */}
