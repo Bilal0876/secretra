@@ -2,6 +2,7 @@ import { router, protectedProcedure } from '../trpcBase';
 import prisma from '../shared/prisma';
 import { checkConflicts } from '../services/conflictService';
 import { emitSignal } from '../socket';
+import { GoogleCalendarService } from '../services/google-calendar.service';
 import {
   taskFilterSchema,
   taskInputSchema,
@@ -69,6 +70,12 @@ export const taskRouter = router({
       });
 
       await emitSignal({ userId: ctx.user.id }, 'calendar_update');
+
+      // Push to Google
+      GoogleCalendarService.forUser(ctx.user.id).then(service => {
+          if (service) service.pushTaskToGoogle(task.id).catch((err: any) => console.error('Background Google task push failed:', err));
+      });
+
       return task;
     }),
 
@@ -99,6 +106,12 @@ export const taskRouter = router({
       });
 
       await emitSignal({ userId: ctx.user.id }, 'calendar_update');
+
+      // Push to Google
+      GoogleCalendarService.forUser(ctx.user.id).then(service => {
+          if (service) service.pushTaskToGoogle(updated.id).catch((err: any) => console.error('Background Google task push failed:', err));
+      });
+
       return updated;
     }),
 
@@ -112,6 +125,14 @@ export const taskRouter = router({
       });
 
       await emitSignal({ userId: ctx.user.id }, 'calendar_update');
+
+      // Delete from Google if exists
+      if ((deleted as any).googleEventId) {
+          GoogleCalendarService.forUser(ctx.user.id).then(service => {
+              if (service) service.deleteTaskFromGoogle((deleted as any).googleEventId).catch((err: any) => console.error('Background Google task delete failed:', err));
+          });
+      }
+
       return deleted;
     }),
 });

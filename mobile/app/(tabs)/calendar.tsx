@@ -253,6 +253,21 @@ export default function CalendarScreen() {
     },
   });
 
+  const deleteTaskMutation = trpc.task.deleteTask.useMutation({
+    onSuccess: () => {
+      utils.calendar.getEvents.invalidate();
+      utils.task.getTasks.invalidate();
+    }
+  });
+
+  const handleDelete = (item: any) => {
+    if (item.isRealTask) {
+        deleteTaskMutation.mutate({ id: item.id });
+    } else {
+        deleteEventMutation.mutate({ id: item.id });
+    }
+  };
+
   const dayEvents = useMemo(() =>
     (events || []).filter(e => new Date(e.startAt).toDateString() === selectedDate.toDateString())
       .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()),
@@ -378,7 +393,7 @@ export default function CalendarScreen() {
               canEdit={event.userId === currentUser?.id}
               onPress={() => setEditingEvent(event)}
               onEdit={() => setEditingEvent(event)}
-              onDelete={() => deleteEventMutation.mutate({ id: event.id })}
+              onDelete={() => handleDelete(event)}
             />
           ))
         )}
@@ -396,7 +411,7 @@ export default function CalendarScreen() {
         <AddEventModal
           visible={!!editingEvent}
           eventToEdit={editingEvent}
-          readOnly={editingEvent.userId !== currentUser?.id}
+          readOnly={editingEvent.isRealTask || editingEvent.userId !== currentUser?.id}
           onClose={() => setEditingEvent(null)}
         />
       )}

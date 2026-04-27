@@ -22,6 +22,7 @@ GoogleSignin.configure({
   webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
   iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
   offlineAccess: true,
+  scopes: ['https://www.googleapis.com/auth/calendar'],
 });
 
 const { width, height } = Dimensions.get('window');
@@ -58,12 +59,16 @@ export default function LoginScreen() {
       await GoogleSignin.hasPlayServices();
       const response = await GoogleSignin.signIn();
 
+      const serverAuthCode = response.data?.serverAuthCode;
       const idToken = response.data?.idToken;
-      if (idToken) {
+
+      if (serverAuthCode) {
+        googleLoginMutation.mutate({ serverAuthCode });
+      } else if (idToken) {
         googleLoginMutation.mutate({ idToken });
       } else {
         setIsGoogleLoading(false);
-        Alert.alert('Auth Error', 'Could not get identity token from Google.');
+        Alert.alert('Auth Error', 'Could not get required tokens from Google.');
       }
     } catch (error: any) {
       setIsGoogleLoading(false);

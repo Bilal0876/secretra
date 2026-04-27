@@ -105,6 +105,31 @@ export class AuthService {
   }
 
   /**
+   * Exchanges a Server Auth Code (from mobile) for tokens (including refresh token)
+   */
+  static async exchangeServerCodeForTokens(code: string) {
+    try {
+      // For mobile 'serverAuthCode' exchange, redirect_uri is often omitted or empty
+      const { tokens } = await googleClient.getToken({
+        code,
+      });
+
+      if (!tokens.id_token) return null;
+
+      const user = await this.verifyGoogleToken(tokens.id_token);
+      if (!user) return null;
+
+      return {
+        user,
+        tokens, // Includes access_token, refresh_token, etc.
+      };
+    } catch (error) {
+      console.error('Google server code exchange error:', error);
+      return null;
+    }
+  }
+
+  /**
    * Verifies an Apple Identity Token
    */
   static async verifyAppleToken(identityToken: string) {

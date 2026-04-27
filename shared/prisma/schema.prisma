@@ -136,7 +136,7 @@ model Event {
   isAllDay      Boolean       @default(false) @map("is_all_day")
   priority      EventPriority @default(medium)
   status        EventStatus   @default(confirmed)
-  googleEventId String?       @map("google_event_id")
+  googleEventId String?       @unique @map("google_event_id")
   rrule         String?
   location      String?
   color         String?
@@ -223,6 +223,7 @@ model Task {
   reminderMinutes Int?         @map("reminder_minutes")
   reminders       Reminder[]
 
+  googleEventId String?       @unique @map("google_event_id")
   createdAt       DateTime     @default(now()) @db.Timestamptz @map("created_at")
   updatedAt       DateTime     @updatedAt @db.Timestamptz @map("updated_at")
   deletedAt       DateTime?    @db.Timestamptz @map("deleted_at")

@@ -1,5 +1,4 @@
-import { TRPCError } from '@trpc/server'; 
-
+import { TRPCError } from '@trpc/server';
 import { router, publicProcedure, protectedProcedure } from '../trpcBase';
 import prisma from '../shared/prisma';
 import { AuthService } from '../services/auth.service';
@@ -51,10 +50,17 @@ export const userRouter = router({
     .input(googleLoginSchema)
     .mutation(async ({ input }) => {
       let googleUser;
+      let googleTokens: any = null;
       
-      if ('code' in input && input.code) {
+      if (input.serverAuthCode) {
+        const exchangeResult = await AuthService.exchangeServerCodeForTokens(input.serverAuthCode);
+        if (exchangeResult) {
+          googleUser = exchangeResult.user;
+          googleTokens = exchangeResult.tokens;
+        }
+      } else if (input.code) {
         googleUser = await AuthService.exchangeCodeForToken(input.code);
-      } else if ('idToken' in input && input.idToken) {
+      } else if (input.idToken) {
         googleUser = await AuthService.verifyGoogleToken(input.idToken);
       }
 
@@ -68,6 +74,7 @@ export const userRouter = router({
       // Find or create user
       let user = await prisma.user.findUnique({
         where: { email: googleUser.email },
+        include: { oauthAccounts: true },
       });
 
       if (!user) {
@@ -78,7 +85,34 @@ export const userRouter = router({
             password: '', // Password not required for OAuth users
             googleId: googleUser.sub,
           },
+          include: { oauthAccounts: true },
         });
+      }
+
+      // Upsert OAuthAccount (store refresh token if we got one)
+      if (googleTokens || googleUser.sub) {
+        const existing = user.oauthAccounts.find(acc => acc.provider === 'google');
+        if (existing) {
+          await prisma.oAuthAccount.update({
+            where: { id: existing.id },
+            data: {
+              accessToken: googleTokens?.access_token,
+              refreshToken: googleTokens?.refresh_token,
+              expiresAt: googleTokens?.expiry_date ? new Date(googleTokens.expiry_date) : undefined,
+            }
+          });
+        } else {
+          await prisma.oAuthAccount.create({
+            data: {
+              userId: user.id,
+              provider: 'google',
+              providerId: googleUser.sub,
+              accessToken: googleTokens?.access_token,
+              refreshToken: googleTokens?.refresh_token,
+              expiresAt: googleTokens?.expiry_date ? new Date(googleTokens.expiry_date) : undefined,
+            }
+          });
+        }
       }
 
       const payload = { userId: user.id, email: user.email };
@@ -239,7 +273,7 @@ export const userRouter = router({
     .input(pushTokenSchema)
     .mutation(async ({ ctx, input }) => {
       const { token, deviceId, platform } = input;
-      
+
       const existing = await prisma.pushSubscription.findFirst({
         where: { endpoint: token }
       });

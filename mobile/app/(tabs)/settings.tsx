@@ -199,6 +199,14 @@ function ProfileScreen() {
   const [editName, setEditName] = useState('');
   const [editTimezone, setEditTimezone] = useState('');
 
+  const syncMutation = trpc.googleSync.syncNow.useMutation({
+    onSuccess: (data) => {
+      utils.calendar.getEvents.invalidate();
+      Alert.alert('Success', `Synced ${data.eventsSynced} events from Google.`);
+    },
+    onError: (err) => Alert.alert('Sync Error', err.message),
+  });
+
   const updateProfile = trpc.profile.updateProfile.useMutation({
     onSuccess: () => {
       utils.profile.me.invalidate();
@@ -512,10 +520,20 @@ function ProfileScreen() {
               sub={theme === 'system' ? 'System default' : theme.charAt(0).toUpperCase() + theme.slice(1)}
               IconComp={Icon.Palette} iconColor="#ec4899" iconBg="#fff0f8"
               onPress={() => setShowThemeModal(true)}
+              isLast
             />
+          </Card>
+
+          <SectionLabel>Integrations</SectionLabel>
+          <Card>
             <Row
-              label="Sync data"
-              IconComp={Icon.Cloud} iconColor="#0ea5e9" iconBg="#f0f9ff"
+              label="Google Calendar Sync"
+              sub="Sync events with your Google account"
+              IconComp={Icon.Cloud} iconColor="#34a853" iconBg="#e6f4ea"
+              onPress={() => {
+                syncMutation.mutate();
+              }}
+              right={syncMutation.isPending ? <ActivityIndicator size="small" color={CORAL} /> : null}
               isLast
             />
           </Card>

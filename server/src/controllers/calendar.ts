@@ -3,6 +3,7 @@ import { router, protectedProcedure } from '../trpcBase';
 import { EventPriority, EventStatus, GroupMemberStatus } from '@ps/db';
 import prisma from '../shared/prisma';
 import { emitSignal } from '../socket';
+import { GoogleCalendarService } from '../services/google-calendar.service';
 
 // Explicitly define schemas to help TS inference in some IDE environments
 const eventInputSchema = z.object({
@@ -156,7 +157,7 @@ export const calendarRouter = router({
       return log;
     }),
 
-  // Get all events for the current user
+  // Get all events and tasks for the calendar view
   getEvents: protectedProcedure
     .input(z.object({
       startDate: z.string().datetime().optional(),
@@ -164,26 +165,66 @@ export const calendarRouter = router({
       groupId: z.string().uuid().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
-      return prisma.event.findMany({
-        where: {
-          OR: [
-            { userId: ctx.user.id },
-            { groupId: input?.groupId },
-            { attendees: { some: { id: ctx.user.id } } }, // Also see events I'm attending
-          ],
-          ...(input?.startDate || input?.endDate ? {
-            startAt: {
-              ...(input.startDate ? { gte: new Date(input.startDate) } : {}),
-              ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
-            }
-          } : {}),
-        } as any,
-        orderBy: { startAt: 'asc' },
-        include: {
-          group: true,
-          ...({ attendees: { select: { id: true, name: true, avatarUrl: true } } } as any),
-        },
-      });
+      const [events, tasks] = await Promise.all([
+        prisma.event.findMany({
+          where: {
+            OR: [
+              { userId: ctx.user.id },
+              { groupId: input?.groupId },
+              { attendees: { some: { id: ctx.user.id } } },
+            ],
+            ...(input?.startDate || input?.endDate ? {
+              startAt: {
+                ...(input.startDate ? { gte: new Date(input.startDate) } : {}),
+                ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
+              }
+            } : {}),
+          } as any,
+          orderBy: { startAt: 'asc' },
+          include: {
+            group: true,
+            attendees: { select: { id: true, name: true, avatarUrl: true } },
+          },
+        }),
+        // Only fetch tasks for personal view (no groupId)
+        !input?.groupId ? prisma.task.findMany({
+          where: {
+            userId: ctx.user.id,
+            deletedAt: null,
+            OR: [
+              { startDate: { not: null } },
+              { dueDate: { not: null } },
+            ],
+            ...(input?.startDate || input?.endDate ? {
+              OR: [
+                { startDate: { 
+                  ...(input.startDate ? { gte: new Date(input.startDate) } : {}),
+                  ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
+                } },
+                { dueDate: { 
+                  ...(input.startDate ? { gte: new Date(input.startDate) } : {}),
+                  ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
+                } }
+              ]
+            } : {}),
+          },
+          orderBy: { startDate: 'asc' },
+        }) : Promise.resolve([]),
+      ]);
+
+      // Normalize tasks into event-like objects
+      const normalizedTasks = tasks.map(t => ({
+        ...t,
+        eventType: 'task',
+        startAt: t.startDate || t.dueDate,
+        endAt: t.dueDate || t.startDate,
+        priority: t.priority,
+        isRealTask: true,
+      }));
+
+      return [...events, ...normalizedTasks].sort((a, b) => 
+        new Date(a.startAt as any).getTime() - new Date(b.startAt as any).getTime()
+      );
     }),
 
   // Get team member's calendar (only if they're in a shared group)
@@ -335,6 +376,11 @@ export const calendarRouter = router({
       }
       await emitSignal({ userId: ctx.user.id }, 'calendar_update');
 
+      // Push to Google in background
+      GoogleCalendarService.forUser(ctx.user.id).then(service => {
+          if (service) service.pushToGoogle(event.id).catch((err: any) => console.error('Background Google push failed:', err));
+      });
+
       return event;
     }),
 
@@ -421,6 +467,11 @@ export const calendarRouter = router({
       }
       await emitSignal({ userId: ctx.user.id }, 'calendar_update');
 
+      // Push to Google
+      GoogleCalendarService.forUser(ctx.user.id).then(service => {
+          if (service) (service as any).pushToGoogle(updatedEvent.id).catch((err: any) => console.error('Background Google push failed:', err));
+      });
+
       return updatedEvent;
     }),
 
@@ -445,6 +496,13 @@ export const calendarRouter = router({
         await emitSignal({ userId: (a as any).id }, 'calendar_update');
       }
       await emitSignal({ userId: ctx.user.id }, 'calendar_update');
+
+      // Delete from Google if exists
+      if (event.googleEventId) {
+          GoogleCalendarService.forUser(ctx.user.id).then(service => {
+              if (service) (service as any).deleteFromGoogle(event.googleEventId!).catch((err: any) => console.error('Background Google delete failed:', err));
+          });
+      }
 
       return result;
     }),
