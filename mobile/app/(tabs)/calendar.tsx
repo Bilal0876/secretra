@@ -247,6 +247,19 @@ export default function CalendarScreen() {
 
   const { data: currentUser } = trpc.profile.me.useQuery();
   const { data: groups = [] } = trpc.group.getGroups.useQuery();
+
+  const syncMutation = trpc.googleSync.syncNow.useMutation({
+    onSuccess: (data) => {
+      console.log(`Auto-synced ${data.eventsSynced} events.`);
+      utils.calendar.getEvents.invalidate();
+    }
+  });
+
+  // Auto-sync on mount
+  React.useEffect(() => {
+    syncMutation.mutate();
+  }, []);
+
   const { data: events, isLoading, refetch, isRefetching } = trpc.calendar.getEvents.useQuery(
     selectedGroupId ? { groupId: selectedGroupId } : undefined
   );

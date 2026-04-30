@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { getStorageItem } from '../utils/storage';
 import { trpc } from '../utils/trpc';
+import { getBaseUrl } from '../utils/api';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -18,11 +19,16 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const utils = trpc.useUtils();
 
   const getSocketUrl = () => {
+    // Rely on the universal API base URL logic so production environment variables are respected.
+    const apiUrl = getBaseUrl();
+    if (apiUrl) {
+       return apiUrl.replace(/\/trpc\/?$/, ''); // Strip /trpc from the end
+    }
+
     const localhost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
     const debuggerHost = Constants.expoConfig?.hostUri;
     const address = debuggerHost?.split(':')[0];
 
-    // We remove /trpc from the end as sockets use the base URL
     if (!address) return `http://${localhost}:4000`;
     return `http://${address}:4000`;
   };
@@ -55,6 +61,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         utils.calendar.getEvents.invalidate();
         utils.calendar.getDashboardOverview.invalidate();
         utils.calendar.getRecentActivity.invalidate();
+      });
+
+      socket.on('calendarSyncComplete', (data) => {
+        console.log(`Signal: Google Sync Complete (${data?.count || 0} items)`);
+        utils.calendar.getEvents.invalidate();
+        utils.calendar.getDashboardOverview.invalidate();
       });
 
       socket.on('new_invite', () => {

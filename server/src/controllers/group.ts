@@ -11,6 +11,7 @@ import {
   removeGroupMemberSchema,
   idParam,
 } from '../schemas';
+import { GoogleCalendarService } from '../services/google-calendar.service';
 
 export const groupRouter = router({
   getGroups: protectedProcedure
@@ -232,6 +233,49 @@ export const groupRouter = router({
         where: { id: input.memberId },
         select: { userId: true },
       });
+
+      if (!member?.userId) {
+        throw new Error('Member not found');
+      }
+
+      // Cleanup: Find all group events created by this user
+      const userGroupEvents = await prisma.event.findMany({
+        where: { groupId: input.groupId, userId: member.userId },
+        select: { id: true, googleEventId: true }
+      });
+
+      // Cleanup: Delete from Google in background (Fire and forget)
+      if (userGroupEvents.length > 0) {
+        GoogleCalendarService.forUser(member.userId).then((service: any) => {
+          if (service) {
+            for (const ev of userGroupEvents) {
+               if (ev.googleEventId) {
+                 (service as any).deleteFromGoogle(ev.googleEventId).catch((err: any) => console.error('Background Google delete failed for removed member event:', err));
+               }
+            }
+          }
+        }).catch((err: any) => console.error('GoogleCalendarService init failed for removed member:', err));
+      }
+
+      // Cleanup: Delete events and tasks created by the user in this group
+      await prisma.event.deleteMany({
+        where: { groupId: input.groupId, userId: member.userId },
+      });
+      // (Wait, Tasks do not have a groupId in Prisma schema directly! 
+      // Tasks are linked to user and event or contact. If event is deleted, task is SetNull or Cascade depending on Prisma schema.
+      // We'll leave Tasks alone unless they belonged to the event, which is CASCADE or SetNull handled)
+
+      // Cleanup: Remove user from being an attendee on ANY event in this group
+      const groupEventsWithUser = await prisma.event.findMany({
+         where: { groupId: input.groupId, attendees: { some: { id: member.userId } } },
+         select: { id: true }
+      });
+      for (const ev of groupEventsWithUser) {
+         await prisma.event.update({
+            where: { id: ev.id },
+            data: { attendees: { disconnect: { id: member.userId } } }
+         });
+      }
 
       await prisma.groupMember.delete({
         where: { id: input.memberId },

@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { appRouter, createContext } from './trpc';
 import { initSocket } from './socket';
+import { SchedulerService } from './services/scheduler.service';
 
 dotenv.config();
 
@@ -39,5 +40,12 @@ app.get('/health', (req, res) => {
 });
 
 httpServer.listen(port, () => {
-  console.log(`🚀 Server + Sockets running on http://localhost:${port}`);
+  console.log(` Server + Sockets running on http://localhost:${port}`);
+
+  // Start Background Scheduler
+  try {
+    SchedulerService.init();
+  } catch (err) {
+    console.error('Failed to start scheduler:', err);
+  }
 });

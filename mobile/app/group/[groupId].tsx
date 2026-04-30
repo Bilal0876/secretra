@@ -398,10 +398,10 @@ const MemberCalendarModal = ({ visible, member, onClose, events, loading }) => {
                 padding: 14, borderRadius: 14, marginBottom: 10,
                 flexDirection: 'row', alignItems: 'center', gap: 12,
               }}>
-                <View style={{ 
-                  width: 3, height: '100%', 
-                  backgroundColor: ev.type === 'task' ? '#6366f1' : NAVY, 
-                  borderRadius: 2, alignSelf: 'stretch' 
+                <View style={{
+                  width: 3, height: '100%',
+                  backgroundColor: ev.type === 'task' ? '#6366f1' : NAVY,
+                  borderRadius: 2, alignSelf: 'stretch'
                 }} />
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -453,8 +453,8 @@ export default function GroupDetailPage() {
   const isAdmin = group?.userId === currentUser?.id;
 
   const [todayBounds] = useState(() => {
-    const s = new Date(); s.setHours(0,0,0,0);
-    const e = new Date(); e.setHours(23,59,59,999);
+    const s = new Date(); s.setHours(0, 0, 0, 0);
+    const e = new Date(); e.setHours(23, 59, 59, 999);
     return { startDate: s.toISOString(), endDate: e.toISOString() };
   });
 
@@ -475,7 +475,7 @@ export default function GroupDetailPage() {
 
   const teamAvailabilityQuery = trpc.calendar.getTeamAvailability.useQuery(
     availabilityParams,
-    { 
+    {
       enabled: !!groupId,
       refetchInterval: 30000 // Poll every 30 seconds
     }
@@ -713,11 +713,11 @@ export default function GroupDetailPage() {
                 >
                   <View style={{ position: 'relative' }}>
                     <AvatarInitials email={m.email} size={40} />
-                    <View 
-                      style={{ 
-                        position: 'absolute', bottom: -1, right: -1, 
-                        width: 14, height: 14, borderRadius: 7, 
-                        backgroundColor: (function() {
+                    <View
+                      style={{
+                        position: 'absolute', bottom: -1, right: -1,
+                        width: 14, height: 14, borderRadius: 7,
+                        backgroundColor: (function () {
                           const s = teamAvailability.find(a => a.userId === m.userId)?.status;
                           if (s === 'busy' || s === 'ending_soon') return '#ef4444';
                           if (s === 'starting_soon') return '#f59e0b';
@@ -725,7 +725,7 @@ export default function GroupDetailPage() {
                         })(),
                         borderWidth: 2, borderColor: 'white',
                         alignItems: 'center', justifyContent: 'center'
-                      }} 
+                      }}
                     >
                       {teamAvailability.find(a => a.userId === m.userId)?.status === 'ending_soon' && (
                         <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: 'white' }} />
@@ -746,7 +746,7 @@ export default function GroupDetailPage() {
                       {!isMemberCreator && (
                         <Text style={{ fontSize: 12, color: MUTED }}>Member</Text>
                       )}
-                      {(function() {
+                      {(function () {
                         const s = teamAvailability.find(a => a.userId === m.userId)?.status;
                         if (s === 'starting_soon') {
                           return (

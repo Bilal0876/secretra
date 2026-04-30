@@ -105,6 +105,7 @@ model OAuthAccount {
   accessToken  String   @map("access_token")
   refreshToken String?  @map("refresh_token")
   expiresAt    DateTime? @db.Timestamptz @map("expires_at")
+  syncToken    String?   @map("sync_token")
   createdAt    DateTime @default(now()) @db.Timestamptz @map("created_at")
 
   @@unique([provider, providerId])

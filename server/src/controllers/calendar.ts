@@ -356,7 +356,7 @@ export const calendarRouter = router({
       // Push to Google in background
       GoogleCalendarService.forUser(ctx.user.id).then(service => {
         if (service) service.pushToGoogle(event.id).catch((err: any) => console.error('Background Google push failed:', err));
-      });
+      }).catch((err: any) => console.error('Background Google push initialization failed:', err));
 
       return event;
     }),
@@ -447,7 +447,7 @@ export const calendarRouter = router({
       // Push to Google
       GoogleCalendarService.forUser(ctx.user.id).then(service => {
         if (service) service.pushToGoogle(updatedEvent.id).catch((err: any) => console.error('Background Google push failed:', err));
-      });
+      }).catch((err: any) => console.error('Background Google push initialization failed:', err));
 
       return updatedEvent;
     }),
@@ -478,7 +478,7 @@ export const calendarRouter = router({
       if (event.googleEventId) {
         GoogleCalendarService.forUser(ctx.user.id).then(service => {
           if (service) (service as any).deleteFromGoogle(event.googleEventId!).catch((err: any) => console.error('Background Google delete failed:', err));
-        });
+        }).catch((err: any) => console.error('Background Google delete initialization failed:', err));
       }
 
       return result;
