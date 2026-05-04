@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpcBase';
-import { GroupMemberStatus } from '@ps/db';
+import { GroupMemberStatus } from '@prisma/client';
+
 import prisma from '../shared/prisma';
 import { emitSignal } from '../socket';
 import { GoogleCalendarService } from '../services/google-calendar.service';
@@ -326,10 +327,8 @@ export const calendarRouter = router({
           busyNames.splice(idx, 1);
           busyNames.unshift('You');
         }
-        const namesStr = busyNames.length > 1
-          ? busyNames.slice(0, -1).join(', ') + ' & ' + busyNames.slice(-1)
-          : busyNames[0];
-        throw new Error(`Conflict! ${namesStr} ${busyNames.length > 1 ? 'are' : 'is'} already busy during this time.`);
+        const verb = (busyNames.length > 1 || busyNames[0] === 'You') ? 'are' : 'is';
+        throw new Error(`Conflict! ${busyNames.join(', ')} ${verb} already busy during this time.`);
       }
 
       const event = await prisma.event.create({
@@ -408,10 +407,8 @@ export const calendarRouter = router({
           busyNames.splice(idx, 1);
           busyNames.unshift('You');
         }
-        const namesStr = busyNames.length > 1
-          ? busyNames.slice(0, -1).join(', ') + ' & ' + busyNames.slice(-1)
-          : busyNames[0];
-        throw new Error(`Update conflict! ${namesStr} ${busyNames.length > 1 ? 'are' : 'is'} busy during this time.`);
+        const verb = (busyNames.length > 1 || busyNames[0] === 'You') ? 'are' : 'is';
+        throw new Error(`Update conflict! ${busyNames.join(', ')} ${verb} busy during this time.`);
       }
 
       const updatedEvent = await prisma.event.update({
@@ -498,7 +495,7 @@ export const calendarRouter = router({
 
       const members = await prisma.groupMember.findMany({
         where: { groupId, status: GroupMemberStatus.accepted },
-        include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+        include: { user: { select: { id: true, name: true, avatarUrl: true, email: true } } },
       });
 
       const memberIds = members
@@ -580,7 +577,7 @@ export const calendarRouter = router({
 
         if (currentItem) {
           const timeLeft = new Date(currentItem.end as any).getTime() - now.getTime();
-          
+
           if (currentItem.type === 'event') {
             const hasJoined = (currentItem as any).attendances?.some((a: any) => a.userId === mId);
             if (hasJoined) {
@@ -602,7 +599,7 @@ export const calendarRouter = router({
 
         return {
           userId: member.user?.id,
-          name: member.user?.name,
+          name: member.user?.name || member.user?.email.split('@')[0] || 'Unknown',
           avatarUrl: member.user?.avatarUrl,
           isBusy: status === 'busy' || status === 'ending_soon',
           status,

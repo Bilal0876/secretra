@@ -39,6 +39,14 @@ app.get('/health', (req, res) => {
   res.json({ status: 'API is running', uptime: process.uptime() });
 });
 
+// Global Express error handler — must be defined AFTER all routes
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('[Express] Unhandled error:', err);
+  res.status(err.status || 500).json({
+    message: err.message || 'Internal server error',
+  });
+});
+
 httpServer.listen(port, () => {
   console.log(` Server + Sockets running on http://localhost:${port}`);
 

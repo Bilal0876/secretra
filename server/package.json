@@ -5,14 +5,15 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "dev": "nodemon --watch src --exec ts-node src/index.ts",
-    "build": "tsc",
+    "build": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\" && tsc",
+    "build:fast": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
     "test": "vitest run",
-    "test:calendar": "ts-node test-calendar.ts"
+    "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@ps/db": "*",
+    "@prisma/client": "^6.19.0",
     "@trpc/server": "^11.16.0",
     "apple-signin-auth": "^1.7.8",
     "axios": "^1.6.8",
@@ -39,6 +40,7 @@
     "@types/node-cron": "^3.0.11",
     "@types/socket.io": "^3.0.1",
     "nodemon": "^3.1.0",
+    "prisma": "^6.19.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5",
     "vitest": "^1.5.0"

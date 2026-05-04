@@ -1,7 +1,8 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { AuthService } from './services/auth.service';
-import { GroupMemberStatus } from '@ps/db';
+import { GroupMemberStatus } from '@prisma/client';
+
 import prisma from './shared/prisma';
 let io: SocketIOServer;
 

@@ -14,8 +14,7 @@
   },
   "workspaces": [
     "mobile",
-    "server",
-    "shared"
+    "server"
   ],
   "devDependencies": {
     "concurrently": "^9.2.1",

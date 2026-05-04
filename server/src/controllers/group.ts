@@ -1,6 +1,6 @@
 import { router, protectedProcedure } from '../trpcBase';
 import { TRPCError } from '@trpc/server';
-import { GroupMemberStatus } from '@ps/db';
+import { GroupMemberStatus } from '@prisma/client';
 import prisma from '../shared/prisma';
 import { emitSignal } from '../socket';
 import {

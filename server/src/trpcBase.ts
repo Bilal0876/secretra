@@ -23,7 +23,19 @@ export const createContext = async ({ req, res }: CreateExpressContextOptions) =
 
 export type Context = Awaited<ReturnType<typeof createContext>>;
 
-const t = initTRPC.context<Context>().create();
+const t = initTRPC.context<Context>().create({
+  errorFormatter({ shape, error }) {
+    return {
+      ...shape,
+      data: {
+        ...shape.data,
+        // Strip stack traces in production to avoid leaking internals
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      },
+    };
+  },
+});
+
 
 const isAuthed = t.middleware(({ next, ctx }) => {
   if (!ctx.user) {

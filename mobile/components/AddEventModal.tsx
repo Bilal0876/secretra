@@ -6,7 +6,7 @@ import {
 import { BottomSheetModal, BottomSheetView, BottomSheetScrollView, BottomSheetTextInput, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { scheduleEventReminder } from '../utils/notifications';
-import { X, Clock, MapPin, AlignLeft, Users, Calendar as CalendarIcon, Bell, CheckSquare, Phone, UtensilsCrossed, Plane, MoreHorizontal } from 'lucide-react-native';
+import { X, Clock, MapPin, AlignLeft, Users, Calendar as CalendarIcon, Bell, CheckSquare, Phone, UtensilsCrossed, Plane, MoreHorizontal, AlertCircle } from 'lucide-react-native';
 import { trpc } from '../utils/trpc';
 
 
@@ -163,6 +163,7 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
     const [showStartPicker, setShowStartPicker] = useState(false);
     const [showEndPicker, setShowEndPicker] = useState(false);
     const [reminderMinutes, setReminderMinutes] = useState<number | null>(5);
+    const [serverError, setServerError] = useState<string | null>(null);
 
     const lastInitRef = useRef<string | null>(null);
     const prevVisibleRef = useRef(false);
@@ -227,7 +228,7 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
             handleClose();
         },
         onError: (error) => {
-            alert(error.message);
+            setServerError(error.message);
         },
     });
 
@@ -237,7 +238,7 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
             handleClose();
         },
         onError: (error) => {
-            alert(error.message);
+            setServerError(error.message);
         },
     });
 
@@ -318,6 +319,7 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
         setIsAllDay(false); setPriority('medium');
         setEventType('meeting'); setCustomType('');
         setReminderMinutes(5);
+        setServerError(null);
         onClose();
     }
 
@@ -325,9 +327,11 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
         if (readOnly || !title.trim()) return;
 
         if (!isAllDay && startAt > endAt) {
-            alert("End time must be after the start time.");
+            setServerError("End time must be after the start time.");
             return;
         }
+
+        setServerError(null);
 
         const payload = {
             title: title.trim(),
@@ -553,6 +557,7 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                                             <TouchableOpacity
                                                 key={mId}
                                                 onPress={() => {
+                                                    setServerError(null);
                                                     setSelectedAttendeeIds(prev =>
                                                         prev.includes(mId) ? prev.filter(id => id !== mId) : [...prev, mId]
                                                     );
@@ -581,24 +586,38 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                             </View>
                         )}
 
-                        {/* Busy Members Warning */}
-                        {(busyMembers.length > 0 || hasPersonalConflict) && !readOnly && (
+                        {/* Proactive Conflict Warning */}
+                        {(busyMembers.length > 0 || hasPersonalConflict) && !readOnly && !serverError && (
                             <View className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex-row items-start gap-3">
-                                <Bell size={16} color="#d97706" style={{ marginTop: 2 }} />
+                                <AlertCircle size={16} color="#d97706" style={{ marginTop: 2 }} />
                                 <View className="flex-1">
                                     <Text className="text-[13px] font-bold text-amber-800">Schedule Conflict</Text>
-                                    <View className="mt-1">
-                                        {hasPersonalConflict && (
-                                            <Text className="text-[12px] text-amber-700">
-                                                • You already have an event scheduled during this time.
-                                            </Text>
-                                        )}
-                                        {busyMembers.map((m, idx) => (
-                                            <Text key={idx} className="text-[12px] text-amber-700">
-                                                • {m.userId === currentUser?.id ? 'You' : m.name} {m.userId === currentUser?.id ? 'have' : 'has'} {m.conflictingEvents.length} overlap{m.conflictingEvents.length > 1 ? 's' : ''}
-                                            </Text>
-                                        ))}
-                                    </View>
+                                    <Text className="text-[12px] text-amber-700 mt-1">
+                                        {(() => {
+                                            const names = [
+                                                ...(hasPersonalConflict ? ['You'] : []),
+                                                ...busyMembers.filter(m => m.userId !== currentUser?.id).map(m => m.name || 'Participant')
+                                            ];
+                                            const namesStr = names.join(' & ');
+                                            const verb = (names.length > 1 || names[0] === 'You') ? 'are' : 'is';
+                                            return `${namesStr} ${verb} already busy during this time.`;
+                                        })()}
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Mutation / Validation Error */}
+                        {serverError && (
+                            <View className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3 flex-row items-start gap-3">
+                                <AlertCircle size={16} color="#ef4444" style={{ marginTop: 2 }} />
+                                <View className="flex-1">
+                                    <Text className="text-[13px] font-bold text-red-800">Cannot save event</Text>
+                                    <Text className="text-[12px] text-red-600 mt-1">
+                                        {serverError.startsWith('Conflict!') || serverError.startsWith('Update conflict!')
+                                            ? serverError.replace('Conflict! ', '').replace('Update conflict! ', '')
+                                            : serverError}
+                                    </Text>
                                 </View>
                             </View>
                         )}
@@ -702,7 +721,10 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                     display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                     onChange={(_, date) => {
                         if (Platform.OS === 'android') setShowStartPicker(false);
-                        if (date) setStart(date);
+                        if (date) {
+                            setStart(date);
+                            setServerError(null);
+                        }
                     }}
                 />
             )}
@@ -714,7 +736,10 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                     display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                     onChange={(_, date) => {
                         if (Platform.OS === 'android') setShowEndPicker(false);
-                        if (date) setEnd(date);
+                        if (date) {
+                            setEnd(date);
+                            setServerError(null);
+                        }
                     }}
                 />
             )}

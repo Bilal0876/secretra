@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { EventPriority, EventStatus, TaskPriority, TaskStatus } from '@ps/db';
+import { EventPriority, EventStatus, TaskPriority, TaskStatus } from '@prisma/client';
 
-// ─── Common Primitives ───────────────────────────────────────────────
+// Common Primitives 
 export const idParam = z.object({ id: z.string().uuid() });
 export const groupIdParam = z.object({ groupId: z.string().uuid() });
 
-// ─── Calendar / Event Schemas ────────────────────────────────────────
+// Calendar / Event Schemas 
 const baseEventSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
@@ -68,7 +68,7 @@ export const dashboardOverviewSchema = z.object({
   nextTask: z.any().nullable(),
 });
 
-// ─── Task Schemas ────────────────────────────────────────────────────
+//Task Schemas
 export const taskFilterSchema = z.object({
   status: z.nativeEnum(TaskStatus).optional(),
   priority: z.nativeEnum(TaskPriority).optional(),
@@ -112,7 +112,7 @@ export const taskUpdateSchema = z.object({
   path: ["dueDate"],
 });
 
-// ─── Note Schemas ────────────────────────────────────────────────────
+// Note Schemas
 export const noteFilterSchema = z.object({
   search: z.string().optional(),
 }).optional();
@@ -132,7 +132,7 @@ export const noteUpdateSchema = noteInputSchema.extend({
   id: z.string().uuid(),
 });
 
-// ─── Group Schemas ───────────────────────────────────────────────────
+// Group Schemas
 export const groupInputSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
@@ -156,7 +156,7 @@ export const removeGroupMemberSchema = z.object({
   memberId: z.string().uuid(),
 });
 
-// ─── User / Auth Schemas ─────────────────────────────────────────────
+// User / Auth Schemas 
 export const registerSchema = z.object({
   email: z.string().email(),
   password: z.string()
@@ -197,7 +197,7 @@ export const pushTokenSchema = z.object({
   platform: z.enum(['web', 'ios', 'android']),
 });
 
-// ─── Google Sync Schemas ─────────────────────────────────────────────
+// Google Sync Schemas 
 export const googleCallbackSchema = z.object({
   code: z.string(),
 });

@@ -398,7 +398,7 @@ export default function TasksScreen() {
     if (!newTitle.trim()) return;
 
     if (startDate && dueDate && startDate > dueDate) {
-      alert("Due date must be after start date.");
+      setServerError("Due date must be after start date.");
       return;
     }
 
@@ -413,7 +413,7 @@ export default function TasksScreen() {
     if (!selectedTask?.title.trim()) return;
 
     if (selectedTask.startDate && selectedTask.dueDate && new Date(selectedTask.startDate) > new Date(selectedTask.dueDate)) {
-      alert("Due date must be after start date.");
+      setServerError("Due date must be after start date.");
       return;
     }
 

@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { View, Platform } from 'react-native';
+import { View, Platform, TouchableOpacity, Text } from 'react-native';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import * as WebBrowser from 'expo-web-browser';
@@ -50,6 +50,27 @@ if (Platform.OS === 'web') {
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
+
+// Expo Router Global Error Boundary
+// Catches hard React tree crashes and shows a recovery screen instead of a white/red crash
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#f6f5f3' }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1e293b', marginBottom: 8 }}>
+        Something went wrong
+      </Text>
+      <Text style={{ fontSize: 13, color: '#64748b', textAlign: 'center', marginBottom: 28 }}>
+        {error.message}
+      </Text>
+      <TouchableOpacity
+        onPress={retry}
+        style={{ backgroundColor: '#1e293b', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 28 }}
+      >
+        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Try Again</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient({

@@ -21,15 +21,17 @@ Secretra is an intelligent, AI-powered personal secretary built for busy profess
 
 ### Google Calendar Integration
 - **Bidirectional Sync** — Events created in Secretra appear instantly in Google Calendar and vice versa.
+- **Incremental Engine** — Uses Google **Sync Tokens** to fetch only changed events, ensuring high-speed, low-bandwidth performance.
 - **Task Sync** — Secretra tasks with due dates are pushed to Google Calendar as `[Task]` events.
 - **Persistent Auth** — OAuth 2.0 with refresh token storage — stays synced in the background without re-login.
 - **Manual Sync Trigger** — One-tap sync from the Settings → Integrations screen.
-- **Duplicate Prevention** — Task reflections from Google are recognized and deduplicated on every sync.
+- **Duplicate Prevention** — Intelligent deduplication of task reflections from Google.
+- **Future: Webhook Architecture** — Planned transition to Google Push Notifications (Webhooks) for instant, event-driven updates (zero-latency sync).
 
 ### Real-Time & Notifications
-- **WebSockets (Socket.io)** — Calendar and task views refresh instantly across all devices when data changes.
+- **WebSockets (Socket.io)** — Calendar and task views refresh instantly across all devices when data changes; includes specialized signals like `calendarSyncComplete`.
 - **Push Notifications (FCM)** — Firebase Cloud Messaging for event and task reminders.
-- **Background Job Queue (BullMQ)** — Redis-backed scheduler for timed reminder delivery.
+- **Zero-Cost Scheduler (node-cron)** — Native Node.js background process for heartbeat checks and reminder delivery (no Redis required).
 
 ### Auth & Security
 - **Email / Password** — bcrypt-hashed passwords, Zod-validated registration with strict password rules.
@@ -59,8 +61,9 @@ personal-secretary/
 ### Backend (`server`)
 - **Express** + **tRPC** — End-to-end type-safe API with zero manual typing of endpoints.
 - **Prisma** ORM over **PostgreSQL**.
-- **Socket.io** for real-time push to clients.
-- **BullMQ** + **ioredis** for background job scheduling.
+- **Server-Side Sockets** for real-time push to clients.
+- **node-cron** for zero-cost background job scheduling.
+- **Google Calendar Service** with Incremental Sync (Sync Tokens).
 - All routes protected via `protectedProcedure` tRPC middleware.
 - Input validated via **Zod** schemas (centralized in `schemas/index.ts`).
 
@@ -78,7 +81,6 @@ personal-secretary/
 ### Prerequisites
 - Node.js 18+
 - PostgreSQL (local or cloud)
-- Redis (for BullMQ reminders — optional for basic usage)
 - Expo Go or a custom dev client
 
 ### 1. Install Dependencies
@@ -129,8 +131,8 @@ cd shared && npx prisma studio    # Visual DB explorer on :5555
 ##  Deployment
 
 - **Mobile:** Built via [EAS Build](https://expo.dev/eas). Sensitive files (`google-services.json`) are injected via EAS Secrets.
-- **Backend:** Deploy `server/` as a standard Node.js service (Railway, Render, Docker, etc.) with production env vars set.
-- **Database:** Any PostgreSQL provider works (Supabase, Neon, Railway).
+- **Backend:** Scalable Node.js service deployed on **AWS EC2**. Secure and stable for production workloads.
+- **Database:** Managed PostgreSQL via **AWS RDS**.
 
 ---
 
@@ -140,8 +142,9 @@ cd shared && npx prisma studio    # Visual DB explorer on :5555
 |---|---|
 | `server/src/trpcBase.ts` | JWT auth middleware + context |
 | `server/src/schemas/index.ts` | All Zod validation schemas |
-| `server/src/services/google-calendar.service.ts` | Bidirectional Google Calendar sync engine |
-| `server/src/controllers/calendar.ts` | Event + task calendar router |
+| `server/src/services/google-calendar.service.ts` | High-performance Incremental Sync engine |
+| `server/src/services/scheduler.service.ts` | Heartbeat & Background task engine |
+| `server/src/controllers/calendar.ts` | Event + task calendar router (with conflict detection) |
 | `shared/prisma/schema.prisma` | Full database schema |
 | `mobile/app/(tabs)/` | All tab screen components |
 | `mobile/app.json` | Expo app configuration |
